@@ -24,7 +24,7 @@ async function seedUsers() {
     if (existingAdmin.rows.length === 0) {
       const hashedAdminPassword = await bcrypt.hash("admin123", 10);
       const adminResult = await client.query(
-        `INSERT INTO users (firstname, lastname, email, password) 
+        `INSERT INTO users (first_name, last_name, email, password) 
          VALUES ($1, $2, $3, $4) 
          RETURNING id`,
         ["Admin", "User", "admin@example.com", hashedAdminPassword]
@@ -40,7 +40,7 @@ async function seedUsers() {
     if (existingUser.rows.length === 0) {
       const hashedUserPassword = await bcrypt.hash("user123", 10);
       const userResult = await client.query(
-        `INSERT INTO users (firstname, lastname, email, password) 
+        `INSERT INTO users (first_name, last_name, email, password) 
          VALUES ($1, $2, $3, $4) 
          RETURNING id`,
         ["Regular", "User", "user@example.com", hashedUserPassword]
@@ -52,14 +52,14 @@ async function seedUsers() {
       console.log("✓ Regular user already exists");
     }
 
-    // Check and insert user_role for admin (userType is NULL for admin)
+    // Check and insert user_role for admin (user_type is NULL for admin)
     const existingAdminRole = await client.query(
-      'SELECT id FROM user_role WHERE "userId" = $1',
+      "SELECT id FROM user_role WHERE user_id = $1",
       [adminUserId]
     );
     if (existingAdminRole.rows.length === 0) {
       await client.query(
-        `INSERT INTO user_role ("userId", role, "userType") 
+        `INSERT INTO user_role (user_id, role, user_type) 
          VALUES ($1, $2, $3)`,
         [adminUserId, "admin", null]
       );
@@ -68,14 +68,14 @@ async function seedUsers() {
       console.log("✓ Admin role already exists");
     }
 
-    // Check and insert user_role for regular user (userType is 'owner')
+    // Check and insert user_role for regular user (user_type is 'creator')
     const existingUserRole = await client.query(
-      'SELECT id FROM user_role WHERE "userId" = $1',
+      "SELECT id FROM user_role WHERE user_id = $1",
       [regularUserId]
     );
     if (existingUserRole.rows.length === 0) {
       await client.query(
-        `INSERT INTO user_role ("userId", role, "userType") 
+        `INSERT INTO user_role (user_id, role, user_type) 
          VALUES ($1, $2, $3)`,
         [regularUserId, "user", "creator"]
       );

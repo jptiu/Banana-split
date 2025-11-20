@@ -13,8 +13,8 @@ export const up = (pgm) => {
 
   pgm.createTable('users', {
     id: { type: 'uuid', primaryKey: true, default: pgm.func('uuid_generate_v4()') },
-    firstname: { type: 'varchar(100)', notNull: true },
-    lastname: { type: 'varchar(100)', notNull: true },
+    first_name: { type: 'varchar(100)', notNull: true },
+    last_name: { type: 'varchar(100)', notNull: true },
     email: { type: 'varchar(100)', notNull: true, unique: true },
     password: { type: 'varchar(255)', notNull: true },
     created_at: { type: 'timestamp', default: pgm.func('CURRENT_TIMESTAMP') },

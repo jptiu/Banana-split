@@ -16,19 +16,19 @@ export const up = (pgm) => {
   // Create user_role table
   pgm.createTable('user_role', {
     id: { type: 'uuid', primaryKey: true, default: pgm.func('uuid_generate_v4()') },
-    userId: {
+    user_id: {
       type: 'uuid',
       notNull: true,
       references: 'users(id)',
       onDelete: 'CASCADE'
     },
     role: { type: 'user_role_enum', notNull: true },
-    userType: { type: 'user_type_enum', notNull: false },
+    user_type: { type: 'user_type_enum', notNull: false },
     created_at: { type: 'timestamp', default: pgm.func('CURRENT_TIMESTAMP') },
   });
 
-  // Create index on userId for better query performance
-  pgm.createIndex('user_role', 'userId');
+  // Create index on user_id for better query performance
+  pgm.createIndex('user_role', 'user_id');
 };
 
 /**
