@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import dotenv from 'dotenv'
-import userRoutes from './routes/users.js'
+import apiRoutes from './routes/api.js'
 
 dotenv.config()
 
@@ -8,7 +8,6 @@ const app = new Hono()
 
 app.get('/', (c) => c.text('Hono + Postgres is running!'))
 
-// Mount API routes
-app.route('/api', userRoutes)
+app.route('/api', apiRoutes)
 
 export default app

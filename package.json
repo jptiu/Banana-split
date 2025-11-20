@@ -1,21 +1,27 @@
 {
   "name": "my-app",
   "type": "module",
+  "license": "MIT",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "migrate:create": "node-pg-migrate create --migrations-dir src/migrations",
+    "migrate:up": "node-pg-migrate up --migrations-dir src/migrations",
+    "migrate:down": "node-pg-migrate down --migrations-dir src/migrations"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",
     "dotenv": "^17.2.3",
     "hono": "^4.10.6",
+    "node-pg-migrate": "^8.0.3",
     "pg": "^8.16.3"
   },
   "devDependencies": {
-    "@types/node": "^20.11.17",
+    "@types/node": "^24.10.1",
     "@types/pg": "^8.15.6",
+    "ts-node": "^10.9.2",
     "tsx": "^4.7.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.3"
   }
 }
