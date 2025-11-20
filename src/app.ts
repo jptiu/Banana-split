@@ -8,7 +8,7 @@ const app = new Hono()
 
 app.get('/', (c) => c.text('Hono + Postgres is running!'))
 
-// mount API routes
+// Mount API routes
 app.route('/api', userRoutes)
 
 export default app
