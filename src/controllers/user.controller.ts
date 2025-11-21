@@ -1,25 +1,31 @@
+import type { Context } from 'hono'
 import { pool } from '../config/db.js'
 import { getErrorMessage } from '../utils/getErrorMessage.js'
 
-export const getUsers = async () => {
+// GET /users
+export const getUsers = async (c: Context) => {
   try {
     const res = await pool.query('SELECT * FROM users')
-    return res.rows
+    return c.json(res.rows)
   } catch (err: unknown) {
     console.error('Error fetching users:', err)
-    throw new Error(getErrorMessage(err))
+    return c.json({ error: getErrorMessage(err) }, 500)
   }
 }
 
-export const createUser = async (name: string, email: string) => {
+// POST /users
+export const createUser = async (c: Context) => {
   try {
+    const { name, email } = await c.req.json()
+    if (!name || !email) return c.json({ error: 'Name and email are required' }, 400)
+
     const res = await pool.query(
       'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
       [name, email]
     )
-    return res.rows[0]
+    return c.json(res.rows[0], 201)
   } catch (err: unknown) {
     console.error('Error creating user:', err)
-    throw new Error(getErrorMessage(err))
+    return c.json({ error: getErrorMessage(err) }, 500)
   }
 }

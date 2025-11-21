@@ -1,72 +1,105 @@
+import type { Context } from 'hono'
 import { PlaidService } from '../services/plaid.service.js'
 import { getErrorMessage } from '../utils/getErrorMessage.js'
 
 // Generate Link Token
-export const generateLinkToken = async () => {
+export const generateLinkToken = async (c: Context) => {
   try {
-    return await PlaidService.generateLinkToken()
+    const data = await PlaidService.generatePlaidLinkToken()
+    return c.json(data)
   } catch (err: unknown) {
     console.error('Error generating link token:', err)
-    throw new Error(getErrorMessage(err))
+    return c.json({ error: getErrorMessage(err) }, 500)
   }
 }
 
 // Exchange Public Token
-export const exchangePublicToken = async (publicToken: string) => {
+export const exchangePublicToken = async (c: Context) => {
   try {
-    return await PlaidService.exchangePublicToken(publicToken)
+    const { public_token } = await c.req.json()
+    if (!public_token) return c.json({ error: 'public_token is required' }, 400)
+
+    const data = await PlaidService.exchangePlaidPublicToken(public_token)
+    return c.json(data)
   } catch (err: unknown) {
     console.error('Error exchanging public token:', err)
-    throw new Error(getErrorMessage(err))
+    return c.json({ error: getErrorMessage(err) }, 500)
   }
 }
 
-// Sandbox Public Token
-export const createSandboxPublicToken = async () => {
+// Create Sandbox Public Token
+export const createSandboxPublicToken = async (c: Context) => {
   try {
-    return await PlaidService.createSandboxPublicToken()
+    const data = await PlaidService.createPlaidSandboxPublicToken()
+    return c.json(data)
   } catch (err: unknown) {
     console.error('Error creating sandbox public token:', err)
-    throw new Error(getErrorMessage(err))
+    return c.json({ error: getErrorMessage(err) }, 500)
   }
 }
 
 // Get Accounts
-export const getAccounts = async (accessToken: string) => {
+export const getAccounts = async (c: Context) => {
   try {
-    return await PlaidService.getAccounts(accessToken)
+    const { access_token } = await c.req.json()
+    if (!access_token) return c.json({ error: 'access_token is required' }, 400)
+
+    const data = await PlaidService.getPlaidAccounts(access_token)
+    return c.json(data)
   } catch (err: unknown) {
     console.error('Error getting accounts:', err)
-    throw new Error(getErrorMessage(err))
+    return c.json({ error: getErrorMessage(err) }, 500)
   }
 }
 
 // Get Balances
-export const getBalances = async (accessToken: string) => {
+export const getBalances = async (c: Context) => {
   try {
-    return await PlaidService.getBalances(accessToken)
+    const { access_token } = await c.req.json()
+    if (!access_token) return c.json({ error: 'access_token is required' }, 400)
+
+    const data = await PlaidService.getPlaidBalances(access_token)
+    return c.json(data)
   } catch (err: unknown) {
     console.error('Error getting balances:', err)
-    throw new Error(getErrorMessage(err))
+    return c.json({ error: getErrorMessage(err) }, 500)
   }
 }
 
 // Get Transactions
-export const getTransactions = async (accessToken: string, startDate: string, endDate: string) => {
+export const getTransactions = async (c: Context) => {
   try {
-    return await PlaidService.getTransactions(accessToken, startDate, endDate)
+    const { access_token, start_date, end_date } = await c.req.json()
+    if (!access_token || !start_date || !end_date) {
+      return c.json(
+        { error: 'access_token, start_date, and end_date are required' },
+        400
+      )
+    }
+
+    const data = await PlaidService.getPlaidTransactions(
+      access_token,
+      start_date,
+      end_date
+    )
+
+    return c.json(data)
   } catch (err: unknown) {
     console.error('Error getting transactions:', err)
-    throw new Error(getErrorMessage(err))
+    return c.json({ error: getErrorMessage(err) }, 500)
   }
 }
 
 // Get Item info
-export const getItem = async (accessToken: string) => {
+export const getItem = async (c: Context) => {
   try {
-    return await PlaidService.getItem(accessToken)
+    const { access_token } = await c.req.json()
+    if (!access_token) return c.json({ error: 'access_token is required' }, 400)
+
+    const data = await PlaidService.getPlaidItem(access_token)
+    return c.json(data)
   } catch (err: unknown) {
     console.error('Error getting item info:', err)
-    throw new Error(getErrorMessage(err))
+    return c.json({ error: getErrorMessage(err) }, 500)
   }
 }
