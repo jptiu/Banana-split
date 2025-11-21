@@ -1,5 +1,11 @@
+// src/routes/plaid.routes.ts
 import { Hono } from 'hono'
-import { generateLinkToken, exchangePublicToken, createSandboxPublicToken } from '../controllers/plaid.controller.js'
+import {
+  generateLinkToken,
+  exchangePublicToken,
+  createSandboxPublicToken,
+  getAccounts,
+} from '../controllers/plaid.controller.js'
 
 const app = new Hono()
 
@@ -18,11 +24,18 @@ app.get('/sandbox/public-token', async (c) => {
 // POST /plaid/exchange
 app.post('/exchange', async (c) => {
   const { public_token } = await c.req.json()
-  if (!public_token) {
-    return c.json({ error: 'public_token is required' }, 400)
-  }
+  if (!public_token) return c.json({ error: 'public_token is required' }, 400)
 
   const data = await exchangePublicToken(public_token)
+  return c.json(data)
+})
+
+// POST /plaid/accounts
+app.post('/accounts', async (c) => {
+  const { access_token } = await c.req.json()
+  if (!access_token) return c.json({ error: 'access_token is required' }, 400)
+
+  const data = await getAccounts(access_token)
   return c.json(data)
 })
 
