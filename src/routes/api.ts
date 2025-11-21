@@ -8,3 +8,4 @@ apiRoutes.route('/users', userRoutes)
 apiRoutes.route('/plaid', plaidRoutes)
 
 export default apiRoutes
+ 
