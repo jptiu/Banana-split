@@ -159,12 +159,22 @@ export function generateSecureToken(length: number = 32): string {
 
 /**
  * Generates a 6-digit verification code
- * Used for email verification
+ * Used for email verification and password reset
  *
  * @returns 6-digit numeric string
  */
 export function generateVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+/**
+ * Generates a UUID v4
+ * Used for request IDs and reset tokens
+ *
+ * @returns UUID v4 string
+ */
+export function generateUUID(): string {
+  return crypto.randomUUID();
 }
 
 /**

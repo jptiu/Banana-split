@@ -41,7 +41,7 @@ export const forgotPasswordSchema = z.object({
 
 //Reset password validation schema
 export const resetPasswordSchema = z.object({
-  token: z.string().min(1, "Token is required"),
+  resetToken: z.string().min(1, "Reset token is required"),
   newPassword: z
     .string()
     .min(8, "Password must be at least 8 characters")
@@ -50,6 +50,17 @@ export const resetPasswordSchema = z.object({
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
       "Password must contain at least one uppercase letter, one lowercase letter, and one number"
     ),
+});
+
+/**
+ * Verify reset code validation schema
+ */
+export const verifyResetCodeSchema = z.object({
+  requestId: z.string().uuid("Invalid request ID format"),
+  code: z
+    .string()
+    .length(6, "Code must be exactly 6 digits")
+    .regex(/^\d{6}$/, "Code must contain only digits"),
 });
 
 /**

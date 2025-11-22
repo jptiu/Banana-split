@@ -20,8 +20,8 @@ import bcrypt from "bcrypt";
 import { pool } from "../config/db.js";
 import {
   generateAuthTokens,
-  generateSecureToken,
   generateVerificationCode,
+  generateUUID,
   verifyRefreshToken,
 } from "../utils/jwt.js";
 import {
@@ -32,10 +32,11 @@ import {
 import type {
   User,
   UserResponse,
-  UserRole,
   AuthTokens,
   SignupRequest,
   LoginRequest,
+  ForgotPasswordResponse,
+  VerifyResetCodeResponse,
 } from "../types/auth.types.js";
 
 // bcrypt salt rounds - 10 is a good balance between security and performance
@@ -43,7 +44,10 @@ const SALT_ROUNDS = 10;
 
 // Token expiration times
 const EMAIL_VERIFICATION_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
-const PASSWORD_RESET_EXPIRY = 1 * 60 * 60 * 1000; // 1 hour
+const PASSWORD_RESET_CODE_EXPIRY = 10 * 60 * 1000; // 10 minutes for the code
+const PASSWORD_RESET_TOKEN_EXPIRY = 15 * 60 * 1000; // 15 minutes for the reset token
+const PASSWORD_RESET_MAX_ATTEMPTS = 5; // Maximum verification attempts
+const PASSWORD_RESET_LOCKOUT_DURATION = 30 * 60 * 1000; // 30 minutes lockout
 
 /**
  * Sanitizes user data by removing sensitive fields
@@ -276,65 +280,181 @@ export async function resendVerificationEmail(
 }
 
 /**
- * Initiates password reset process by generating a reset token
+ * Initiates password reset process by generating a 6-digit code and requestId
  *
  * @param email - User's email address
- * @returns Success message
+ * @returns Success message and requestId
  */
 export async function forgotPassword(
   email: string
-): Promise<{ message: string }> {
+): Promise<ForgotPasswordResponse> {
   const result = await pool.query<User>(
     "SELECT * FROM users WHERE email = $1",
     [email]
   );
 
+  // Always return success to prevent user enumeration
   if (result.rows.length === 0) {
+    // Return a fake requestId to prevent user enumeration
     return {
-      message:
-        "If an account exists with this email, a password reset link will be sent",
+      message: "Verification code sent.",
+      requestId: generateUUID(),
     };
   }
 
   const user = result.rows[0];
 
-  const resetToken = generateSecureToken();
-  const resetExpiry = new Date(Date.now() + PASSWORD_RESET_EXPIRY);
+  // Generate 6-digit code and requestId
+  const resetCode = generateVerificationCode();
+  const requestId = generateUUID();
+  const codeExpiry = new Date(Date.now() + PASSWORD_RESET_CODE_EXPIRY);
+
+  await pool.query(
+    `UPDATE users 
+     SET password_reset_code = $1,
+         password_reset_request_id = $2,
+         password_reset_expires = $3,
+         password_reset_attempts = 0,
+         password_reset_locked_until = NULL,
+         password_reset_token = NULL,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $4`,
+    [resetCode, requestId, codeExpiry, user.id]
+  );
+
+  await sendPasswordResetEmail(user.email, user.first_name, resetCode);
+
+  return {
+    message: "Verification code sent.",
+    requestId: requestId,
+  };
+}
+
+/**
+ * Verifies the 6-digit reset code and generates a short-lived reset token
+ *
+ * @param requestId - UUID from forgot password request
+ * @param code - 6-digit verification code
+ * @returns Success message and resetToken
+ * @throws Error if code is invalid, expired, or too many attempts
+ */
+export async function verifyResetCode(
+  requestId: string,
+  code: string
+): Promise<VerifyResetCodeResponse> {
+  const result = await pool.query<User>(
+    `SELECT * FROM users 
+     WHERE password_reset_request_id = $1`,
+    [requestId]
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error("Invalid or expired reset request");
+  }
+
+  const user = result.rows[0];
+
+  // Check if account is locked due to too many attempts
+  if (
+    user.password_reset_locked_until &&
+    new Date(user.password_reset_locked_until) > new Date()
+  ) {
+    const remainingTime = Math.ceil(
+      (new Date(user.password_reset_locked_until).getTime() - Date.now()) /
+        1000 /
+        60
+    );
+    throw new Error(
+      `Too many failed attempts. Please try again in ${remainingTime} minutes.`
+    );
+  }
+
+  // Check if code has expired
+  if (
+    !user.password_reset_expires ||
+    new Date(user.password_reset_expires) < new Date()
+  ) {
+    throw new Error("Verification code has expired. Please request a new one.");
+  }
+
+  // Check if code matches
+  if (user.password_reset_code !== code) {
+    // Increment attempt count
+    const attempts = (user.password_reset_attempts || 0) + 1;
+
+    // Lock account if max attempts reached
+    if (attempts >= PASSWORD_RESET_MAX_ATTEMPTS) {
+      const lockedUntil = new Date(
+        Date.now() + PASSWORD_RESET_LOCKOUT_DURATION
+      );
+      await pool.query(
+        `UPDATE users 
+         SET password_reset_attempts = $1,
+             password_reset_locked_until = $2,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $3`,
+        [attempts, lockedUntil, user.id]
+      );
+      throw new Error(
+        "Too many failed attempts. Your account has been temporarily locked for 30 minutes."
+      );
+    }
+
+    // Just increment attempts
+    await pool.query(
+      `UPDATE users 
+       SET password_reset_attempts = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [attempts, user.id]
+    );
+
+    const remainingAttempts = PASSWORD_RESET_MAX_ATTEMPTS - attempts;
+    throw new Error(
+      `Invalid verification code. ${remainingAttempts} attempt${
+        remainingAttempts !== 1 ? "s" : ""
+      } remaining.`
+    );
+  }
+
+  // Code is valid - generate short-lived reset token
+  const resetToken = generateUUID();
+  const tokenExpiry = new Date(Date.now() + PASSWORD_RESET_TOKEN_EXPIRY);
 
   await pool.query(
     `UPDATE users 
      SET password_reset_token = $1,
          password_reset_expires = $2,
+         password_reset_attempts = 0,
+         password_reset_locked_until = NULL,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = $3`,
-    [resetToken, resetExpiry, user.id]
+    [resetToken, tokenExpiry, user.id]
   );
 
-  await sendPasswordResetEmail(user.email, user.first_name, resetToken);
-
   return {
-    message:
-      "If an account exists with this email, a password reset link will be sent",
+    message: "Code verified.",
+    resetToken: resetToken,
   };
 }
 
 /**
  * Resets user's password using the reset token
  *
- * @param token - Password reset token
+ * @param resetToken - Short-lived reset token from code verification
  * @param newPassword - New password (will be hashed)
  * @returns Success message
  * @throws Error if token is invalid or expired
  */
 export async function resetPassword(
-  token: string,
+  resetToken: string,
   newPassword: string
 ): Promise<{ message: string }> {
   const result = await pool.query<User>(
     `SELECT * FROM users 
      WHERE password_reset_token = $1 
      AND password_reset_expires > NOW()`,
-    [token]
+    [resetToken]
   );
 
   if (result.rows.length === 0) {
@@ -350,6 +470,10 @@ export async function resetPassword(
      SET password = $1,
          password_reset_token = NULL,
          password_reset_expires = NULL,
+         password_reset_code = NULL,
+         password_reset_request_id = NULL,
+         password_reset_attempts = 0,
+         password_reset_locked_until = NULL,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = $2`,
     [passwordHash, user.id]
@@ -357,7 +481,7 @@ export async function resetPassword(
 
   await sendPasswordChangedEmail(user.email, user.first_name);
 
-  return { message: "Password reset successfully" };
+  return { message: "Password updated successfully." };
 }
 
 /**

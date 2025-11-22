@@ -20,6 +20,7 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   verifyEmailSchema,
+  verifyResetCodeSchema,
   refreshTokenSchema,
 } from "../validators/authValidators.js";
 import {
@@ -56,7 +57,6 @@ export class AuthController {
         201
       );
     } catch (error) {
-
       if (error instanceof Error && error.name === "ZodError") {
         return c.json(
           {
@@ -130,7 +130,6 @@ export class AuthController {
         },
       });
     } catch (error) {
-
       const clientIP = getClientIP(c.req.raw.headers);
 
       const rateLimitResult = recordFailedAttempt(clientIP);
@@ -188,7 +187,6 @@ export class AuthController {
         message: result.message,
       });
     } catch (error) {
-
       if (error instanceof Error && error.name === "ZodError") {
         return c.json(
           {
@@ -255,7 +253,7 @@ export class AuthController {
    * Initiates password reset process
    *
    * @param c - Hono context
-   * @returns Success message (always returns success to prevent user enumeration)
+   * @returns Success message and requestId
    */
   static async forgotPassword(c: Context) {
     try {
@@ -267,6 +265,9 @@ export class AuthController {
       return c.json({
         success: true,
         message: result.message,
+        data: {
+          requestId: result.requestId,
+        },
       });
     } catch (error) {
       if (error instanceof Error && error.name === "ZodError") {
@@ -282,9 +283,54 @@ export class AuthController {
 
       return c.json({
         success: true,
-        message:
-          "If an account exists with this email, a password reset link will be sent",
+        message: "Verification code sent.",
+        data: {
+          requestId: "00000000-0000-0000-0000-000000000000",
+        },
       });
+    }
+  }
+
+  /**
+   * POST /api/auth/verify-reset-code
+   * Verifies the 6-digit reset code and generates reset token
+   *
+   * @param c - Hono context
+   * @returns Success message and resetToken
+   */
+  static async verifyResetCode(c: Context) {
+    try {
+      const body = await c.req.json();
+      const { requestId, code } = verifyResetCodeSchema.parse(body);
+
+      const result = await AuthService.verifyResetCode(requestId, code);
+
+      return c.json({
+        success: true,
+        message: result.message,
+        data: {
+          resetToken: result.resetToken,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "ZodError") {
+        return c.json(
+          {
+            success: false,
+            message: "Validation error",
+            errors: error,
+          },
+          400
+        );
+      }
+
+      return c.json(
+        {
+          success: false,
+          message: getErrorMessage(error),
+        },
+        400
+      );
     }
   }
 
@@ -298,16 +344,15 @@ export class AuthController {
   static async resetPassword(c: Context) {
     try {
       const body = await c.req.json();
-      const { token, newPassword } = resetPasswordSchema.parse(body);
+      const { resetToken, newPassword } = resetPasswordSchema.parse(body);
 
-      const result = await AuthService.resetPassword(token, newPassword);
+      const result = await AuthService.resetPassword(resetToken, newPassword);
 
       return c.json({
         success: true,
         message: result.message,
       });
     } catch (error) {
-
       if (error instanceof Error && error.name === "ZodError") {
         return c.json(
           {
@@ -349,7 +394,6 @@ export class AuthController {
         data: { tokens },
       });
     } catch (error) {
-
       if (error instanceof Error && error.name === "ZodError") {
         return c.json(
           {

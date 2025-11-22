@@ -79,10 +79,14 @@ This is a production-ready authentication system for the Banana Split API, built
 
 ### 5. Password Reset
 
-- Secure random token generation
-- 1-hour expiration for reset tokens
+- Three-step verification process for enhanced security
+- 6-digit verification code with 10-minute expiration
+- UUID-based request tracking
+- Brute-force protection (max 5 attempts)
+- 30-minute account lockout after failed attempts
+- Short-lived reset token (15 minutes) after code verification
 - Generic success messages to prevent user enumeration
-- Token invalidated after use
+- All reset tokens invalidated after password change
 
 ### 6. Role-Based Access Control
 
@@ -219,7 +223,7 @@ Resend email verification token.
 
 #### POST `/api/auth/forgot-password`
 
-Initiate password reset process.
+Initiate password reset process by requesting a 6-digit verification code.
 
 **Request:**
 
@@ -234,22 +238,98 @@ Initiate password reset process.
 ```json
 {
   "success": true,
-  "message": "If an account exists with this email, a password reset link will be sent"
+  "message": "Verification code sent.",
+  "data": {
+    "requestId": "550e8400-e29b-41d4-a716-446655440000"
+  }
 }
 ```
 
-#### POST `/api/auth/reset-password`
+**Notes:**
 
-Reset password using token.
+- A 6-digit code is sent to the email address if the account exists
+- The `requestId` is required for the next step (code verification)
+- Code expires in 10 minutes
+- Generic response prevents user enumeration
+
+#### POST `/api/auth/verify-reset-code`
+
+Verify the 6-digit code and receive a reset token.
 
 **Request:**
 
 ```json
 {
-  "token": "reset-token-from-email",
+  "requestId": "550e8400-e29b-41d4-a716-446655440000",
+  "code": "123456"
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "message": "Code verified.",
+  "data": {
+    "resetToken": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+  }
+}
+```
+
+**Error Response (400) - Invalid Code:**
+
+```json
+{
+  "success": false,
+  "message": "Invalid verification code. 3 attempts remaining."
+}
+```
+
+**Error Response (400) - Account Locked:**
+
+```json
+{
+  "success": false,
+  "message": "Too many failed attempts. Your account has been temporarily locked for 30 minutes."
+}
+```
+
+**Notes:**
+
+- Maximum 5 verification attempts allowed
+- Account is locked for 30 minutes after 5 failed attempts
+- Code must be verified within 10 minutes of request
+- Reset token is valid for 15 minutes
+
+#### POST `/api/auth/reset-password`
+
+Reset password using the reset token from code verification.
+
+**Request:**
+
+```json
+{
+  "resetToken": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   "newPassword": "NewSecurePass123"
 }
 ```
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "message": "Password updated successfully."
+}
+```
+
+**Notes:**
+
+- Reset token must be used within 15 minutes
+- Password must meet security requirements (8+ chars, uppercase, lowercase, number)
+- All reset tokens and codes are invalidated after successful password change
+- Confirmation email is sent to the user
 
 #### POST `/api/auth/refresh`
 
@@ -454,18 +534,26 @@ CREATE TABLE users (
   password VARCHAR(255) NOT NULL,
   is_email_verified BOOLEAN DEFAULT FALSE,
   role user_role NOT NULL DEFAULT 'user',
+  user_type user_type,
   email_verification_token VARCHAR(255),
   email_verification_expires TIMESTAMP,
   password_reset_token VARCHAR(255),
   password_reset_expires TIMESTAMP,
+  password_reset_code VARCHAR(6),
+  password_reset_request_id UUID,
+  password_reset_attempts INTEGER DEFAULT 0,
+  password_reset_locked_until TIMESTAMP,
   last_login_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TYPE user_role AS ENUM ('user', 'admin');
+CREATE TYPE user_type AS ENUM ('creator', 'member');
 CREATE INDEX idx_email_verification ON users(email_verification_token);
 CREATE INDEX idx_password_reset ON users(password_reset_token);
+CREATE INDEX idx_password_reset_request ON users(password_reset_request_id);
+CREATE INDEX idx_password_reset_code ON users(password_reset_code);
 ```
 
 Run migrations with:
@@ -482,12 +570,27 @@ npm run migrate:up
 # Signup
 curl -X POST http://localhost:3000/api/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"first_name":"John","last_name":"Doe","email":"john@example.com","password":"SecurePass123"}'
+  -d '{"first_name":"John","last_name":"Doe","email":"john@example.com","password":"SecurePass123","user_type":"member"}'
 
 # Login
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"john@example.com","password":"SecurePass123"}'
+
+# Forgot Password (Step 1: Request code)
+curl -X POST http://localhost:3000/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{"email":"john@example.com"}'
+
+# Verify Reset Code (Step 2: Verify code)
+curl -X POST http://localhost:3000/api/auth/verify-reset-code \
+  -H "Content-Type: application/json" \
+  -d '{"requestId":"<requestId-from-step1>","code":"123456"}'
+
+# Reset Password (Step 3: Set new password)
+curl -X POST http://localhost:3000/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{"resetToken":"<resetToken-from-step2>","newPassword":"NewSecurePass123"}'
 
 # Get current user (use token from login)
 curl http://localhost:3000/api/auth/me \

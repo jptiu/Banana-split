@@ -146,28 +146,26 @@ export const sendVerificationEmail = async (
 /**
  * Send Password Reset Email
  *
- * Sends an email with a link to reset the user's password
- * Link contains a secure token that expires in 1 hour
+ * Sends an email with a 6-digit code to reset the user's password
+ * Code expires in 10 minutes
  *
  * @param email - User's email address
  * @param firstName - User's first name for personalization
- * @param token - Password reset token
+ * @param code - 6-digit verification code
  */
 export const sendPasswordResetEmail = async (
   email: string,
   firstName: string,
-  token: string
+  code: string
 ): Promise<void> => {
   try {
     if (!SMTP_USER || !SMTP_PASSWORD) {
       console.log("📧 Password reset email would be sent to:", email);
-      console.log("🔗 Reset token:", token);
+      console.log("🔢 Reset code:", code);
       return; // Skip sending in development if not configured
     }
 
     const transporter = createTransporter();
-
-    const resetUrl = `${APP_URL}/change-pass?token=${token}`;
 
     const mailOptions = {
       from: `"Banana Splits" <${EMAIL_FROM}>`,
@@ -182,29 +180,22 @@ export const sendPasswordResetEmail = async (
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; }
             .content { background-color: #f9f9f9; padding: 30px; }
-            .button { 
-              display: inline-block; 
-              padding: 12px 30px; 
-              background-color: #FF9800; 
-              color: white; 
-              text-decoration: none; 
-              border-radius: 5px;
-              margin: 20px 0;
+            .code-box { 
+              background-color: #f0f0f0; 
+              padding: 30px; 
+              margin: 30px 0;
+              text-align: center;
+              border-radius: 10px;
+              border: 2px dashed #FF9800;
+            }
+            .code {
+              font-size: 48px;
+              font-weight: bold;
+              color: #FF9800;
+              letter-spacing: 10px;
+              font-family: 'Courier New', monospace;
             }
             .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-            .token { 
-              background-color: #f0f0f0; 
-              padding: 10px; 
-              margin: 20px 0;
-              border-left: 4px solid #FF9800;
-              font-family: monospace;
-            }
-            .warning { 
-              background-color: #fff3cd; 
-              border-left: 4px solid #ffc107; 
-              padding: 15px; 
-              margin: 20px 0; 
-            }
           </style>
         </head>
         <body>
@@ -216,22 +207,13 @@ export const sendPasswordResetEmail = async (
               <h2>Hi ${firstName},</h2>
               <p>We received a request to reset your password for your Banana Splits account.</p>
               
-              <p>Click the button below to reset your password:</p>
-              
-              <div style="text-align: center;">
-                <a href="${resetUrl}" class="button">Reset Password</a>
+              <div class="code-box">
+                <div class="code">${code}</div>
               </div>
               
-              <div class="warning">
-                <strong>⚠️ Security Notice:</strong>
-                <ul style="margin: 10px 0;">
-                  <li>This link will expire in 1 hour</li>
-                  <li>You will need to provide a new password</li>
-                  <li>Your new password must contain at least 8 characters, including uppercase, lowercase, and numbers</li>
-                </ul>
-              </div>
+              <p><strong>This code will expire in 10 minutes.</strong></p>
               
-              <p><strong>If you didn't request a password reset, please ignore this email.</strong> Your password will remain unchanged.</p>
+              <p>If you didn't request a password reset, please ignore this email. Your password will remain unchanged.</p>
             </div>
             <div class="footer">
               <p>&copy; ${new Date().getFullYear()} Banana Splits. All rights reserved.</p>
@@ -246,9 +228,9 @@ export const sendPasswordResetEmail = async (
 
         We received a request to reset your password for your Banana Splits account.
 
-        Reset Password Link: ${resetUrl}
+        Your verification code is: ${code}
 
-        This link will expire in 1 hour.
+        This code will expire in 10 minutes.
 
         If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
 
@@ -324,7 +306,6 @@ export const sendPasswordChangedEmail = async (
               <p>For security reasons, we recommend:</p>
               <ul>
                 <li>Use a unique password for your Banana Splits account</li>
-                <li>Enable two-factor authentication if available</li>
                 <li>Keep your password secure and don't share it with anyone</li>
               </ul>
             </div>

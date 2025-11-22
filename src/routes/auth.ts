@@ -30,6 +30,7 @@ auth.post("/login", AuthController.login);
 auth.post("/verify-email", AuthController.verifyEmail);
 auth.post("/resend-verification", AuthController.resendVerification);
 auth.post("/forgot-password", AuthController.forgotPassword);
+auth.post("/verify-reset-code", AuthController.verifyResetCode);
 auth.post("/reset-password", AuthController.resetPassword);
 auth.post("/refresh", AuthController.refreshToken);
 
