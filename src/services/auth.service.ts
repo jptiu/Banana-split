@@ -49,6 +49,10 @@ const PASSWORD_RESET_TOKEN_EXPIRY = 15 * 60 * 1000; // 15 minutes for the reset 
 const PASSWORD_RESET_MAX_ATTEMPTS = 5; // Maximum verification attempts
 const PASSWORD_RESET_LOCKOUT_DURATION = 30 * 60 * 1000; // 30 minutes lockout
 
+// Login attempt tracking
+const MAX_LOGIN_ATTEMPTS = 5; // Maximum login attempts before account lock
+const LOGIN_LOCKOUT_DURATION = 30 * 60 * 1000; // 30 minutes account lockout
+
 /**
  * Sanitizes user data by removing sensitive fields
  * Never expose password or internal tokens to the client
@@ -155,10 +159,11 @@ export async function signup(
 
 /**
  * Authenticates a user with email and password
+ * Tracks failed login attempts in the database and implements account locking
  *
  * @param data - Login credentials
  * @returns Sanitized user object and auth tokens
- * @throws Error if credentials are invalid
+ * @throws Error if credentials are invalid or account is locked
  */
 export async function login(
   data: LoginRequest
@@ -176,19 +181,86 @@ export async function login(
 
   const user = result.rows[0];
 
+  // Check if account is locked
+  if (
+    user.login_locked_until &&
+    new Date(user.login_locked_until) > new Date()
+  ) {
+    const remainingTime = Math.ceil(
+      (new Date(user.login_locked_until).getTime() - Date.now()) / 1000 / 60
+    );
+    throw new Error(
+      `Account temporarily locked due to multiple failed login attempts. Please try again in ${remainingTime} minute${
+        remainingTime !== 1 ? "s" : ""
+      }.`
+    );
+  }
+
+  // Reset lock if it has expired
+  if (
+    user.login_locked_until &&
+    new Date(user.login_locked_until) <= new Date()
+  ) {
+    await pool.query(
+      `UPDATE users 
+       SET failed_login_attempts = 0,
+           login_locked_until = NULL
+       WHERE id = $1`,
+      [user.id]
+    );
+  }
+
   const isPasswordValid = await bcrypt.compare(password, user.password);
 
   if (!isPasswordValid) {
-    throw new Error("Invalid email or password");
+    // Increment failed attempts
+    const failedAttempts = (user.failed_login_attempts || 0) + 1;
+
+    // Check if we should lock the account
+    if (failedAttempts >= MAX_LOGIN_ATTEMPTS) {
+      const lockedUntil = new Date(Date.now() + LOGIN_LOCKOUT_DURATION);
+      await pool.query(
+        `UPDATE users 
+         SET failed_login_attempts = $1,
+             login_locked_until = $2,
+             last_failed_login_at = CURRENT_TIMESTAMP
+         WHERE id = $3`,
+        [failedAttempts, lockedUntil, user.id]
+      );
+      throw new Error(
+        "Too many failed login attempts. Your account has been temporarily locked for 30 minutes."
+      );
+    }
+
+    // Just increment attempts
+    await pool.query(
+      `UPDATE users 
+       SET failed_login_attempts = $1,
+           last_failed_login_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [failedAttempts, user.id]
+    );
+
+    const remainingAttempts = MAX_LOGIN_ATTEMPTS - failedAttempts;
+    throw new Error(
+      `Invalid email or password. ${remainingAttempts} attempt${
+        remainingAttempts !== 1 ? "s" : ""
+      } remaining.`
+    );
   }
 
   if (!user.is_email_verified) {
     throw new Error("Please verify your email address before logging in");
   }
 
-  // Update last login timestamp
+  // Successful login - reset failed attempts and update last login
   await pool.query(
-    "UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1",
+    `UPDATE users 
+     SET last_login_at = CURRENT_TIMESTAMP,
+         failed_login_attempts = 0,
+         login_locked_until = NULL,
+         last_failed_login_at = NULL
+     WHERE id = $1`,
     [user.id]
   );
 

@@ -94,7 +94,7 @@ export class AuthController {
   /**
    * POST /api/auth/login
    * Authenticates a user with email and password
-   * Implements rate limiting to prevent brute-force attacks
+   * Implements both IP-based rate limiting and database-tracked account locking
    *
    * @param c - Hono context
    * @returns User object and auth tokens
@@ -119,6 +119,7 @@ export class AuthController {
 
       const result = await AuthService.login(validatedData);
 
+      // Clear IP rate limiting on successful login
       recordSuccessfulAttempt(clientIP);
 
       return c.json({
@@ -132,6 +133,7 @@ export class AuthController {
     } catch (error) {
       const clientIP = getClientIP(c.req.raw.headers);
 
+      // Record failed IP attempt for rate limiting
       const rateLimitResult = recordFailedAttempt(clientIP);
 
       if (error instanceof Error && error.name === "ZodError") {
@@ -147,21 +149,33 @@ export class AuthController {
 
       const errorMessage = getErrorMessage(error);
 
+      // Check if IP is now blocked due to rate limiting
       if (rateLimitResult.isBlocked) {
         return c.json(
           {
             success: false,
-            message: `Too many failed login attempts. Account temporarily locked for ${rateLimitResult.remainingTime} seconds.`,
+            message: `Too many failed login attempts. Temporarily blocked for ${rateLimitResult.remainingTime} seconds.`,
           },
           429
         );
       }
 
+      // Check if it's an account lock error (database-tracked)
+      if (errorMessage.includes("Account temporarily locked")) {
+        return c.json(
+          {
+            success: false,
+            message: errorMessage,
+          },
+          423 // 423 Locked status code
+        );
+      }
+
+      // Return error with remaining attempts info if available
       return c.json(
         {
           success: false,
           message: errorMessage,
-          attemptsRemaining: rateLimitResult.attemptsRemaining,
         },
         401
       );

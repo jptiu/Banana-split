@@ -55,8 +55,7 @@ export const sendVerificationEmail = async (
 ): Promise<void> => {
   try {
     if (!SMTP_USER || !SMTP_PASSWORD) {
-      console.log("📧 Email verification would be sent to:", email);
-      console.log("🔢 Verification code:", code);
+      console.log("📧 Email service not configured. Please setup SMTP credentials first.");
       return; // Skip sending in development if not configured
     }
 

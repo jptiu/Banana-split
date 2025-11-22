@@ -25,6 +25,9 @@ export interface User {
   password_reset_request_id: string | null;
   password_reset_attempts: number | null;
   password_reset_locked_until: Date | null;
+  failed_login_attempts: number | null;
+  login_locked_until: Date | null;
+  last_failed_login_at: Date | null;
   last_login_at: Date | null;
   created_at: Date;
   updated_at: Date;
