@@ -148,13 +148,23 @@ export function verifyRefreshToken(token: string): JWTPayload {
 
 /**
  * Generates a cryptographically secure random token
- * Used for email verification and password reset tokens
+ * Used for password reset tokens
  *
  * @param length - Length of the token in bytes (default: 32)
  * @returns Hex string representation of the random token
  */
 export function generateSecureToken(length: number = 32): string {
   return crypto.randomBytes(length).toString("hex");
+}
+
+/**
+ * Generates a 6-digit verification code
+ * Used for email verification
+ *
+ * @returns 6-digit numeric string
+ */
+export function generateVerificationCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 /**

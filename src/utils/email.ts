@@ -41,28 +41,26 @@ const createTransporter = () => {
 /**
  * Send Email Verification
  *
- * Sends an email with a verification link to confirm user's email address
- * User must click the link to verify their account before logging in
+ * Sends an email with a 6-digit verification code to confirm user's email address
+ * User must enter the code to verify their account before logging in
  *
  * @param email - User's email address
  * @param firstName - User's first name for personalization
- * @param token - Verification token
+ * @param code - 6-digit verification code
  */
 export const sendVerificationEmail = async (
   email: string,
   firstName: string,
-  token: string
+  code: string
 ): Promise<void> => {
   try {
     if (!SMTP_USER || !SMTP_PASSWORD) {
       console.log("📧 Email verification would be sent to:", email);
-      console.log("🔗 Verification token:", token);
+      console.log("🔢 Verification code:", code);
       return; // Skip sending in development if not configured
     }
 
     const transporter = createTransporter();
-
-    const verificationUrl = `${APP_URL}/verify-email?token=${token}`;
 
     const mailOptions = {
       from: `"Banana Splits" <${EMAIL_FROM}>`,
@@ -77,23 +75,22 @@ export const sendVerificationEmail = async (
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
             .content { background-color: #f9f9f9; padding: 30px; }
-            .button { 
-              display: inline-block; 
-              padding: 12px 30px; 
-              background-color: #4CAF50; 
-              color: white; 
-              text-decoration: none; 
-              border-radius: 5px;
-              margin: 20px 0;
+            .code-box { 
+              background-color: #f0f0f0; 
+              padding: 30px; 
+              margin: 30px 0;
+              text-align: center;
+              border-radius: 10px;
+              border: 2px dashed #4CAF50;
+            }
+            .code {
+              font-size: 48px;
+              font-weight: bold;
+              color: #4CAF50;
+              letter-spacing: 10px;
+              font-family: 'Courier New', monospace;
             }
             .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-            .token { 
-              background-color: #f0f0f0; 
-              padding: 10px; 
-              margin: 20px 0;
-              border-left: 4px solid #4CAF50;
-              font-family: monospace;
-            }
           </style>
         </head>
         <body>
@@ -105,13 +102,13 @@ export const sendVerificationEmail = async (
               <h2>Hi ${firstName},</h2>
               <p>Thank you for signing up! Please verify your email address to complete your registration and access your account.</p>
               
-              <p>Click the button below to verify your email:</p>
+              <p>Enter this verification code in the app:</p>
               
-              <div style="text-align: center;">
-                <a href="${verificationUrl}" class="button">Verify Email Address</a>
+              <div class="code-box">
+                <div class="code">${code}</div>
               </div>
               
-              <p><strong>This link will expire in 1 hour.</strong></p>
+              <p><strong>This code will expire in 24 hours.</strong></p>
               
               <p>If you didn't create an account with Banana Splits, you can safely ignore this email.</p>
             </div>
@@ -128,9 +125,9 @@ export const sendVerificationEmail = async (
 
         Thank you for signing up! Please verify your email address to complete your registration.
 
-        Verification Link: ${verificationUrl}
+        Your verification code is: ${code}
 
-        This link will expire in 1 hour.
+        This code will expire in 24 hours.
 
         If you didn't create an account with Banana Splits, you can safely ignore this email.
 
@@ -213,7 +210,7 @@ export const sendPasswordResetEmail = async (
         <body>
           <div class="container">
             <div class="header">
-              <h1>Password Reset Request 🔒</h1>
+              <h1>Password Reset Request</h1>
             </div>
             <div class="content">
               <h2>Hi ${firstName},</h2>

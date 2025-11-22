@@ -21,6 +21,7 @@ import { pool } from "../config/db.js";
 import {
   generateAuthTokens,
   generateSecureToken,
+  generateVerificationCode,
   verifyRefreshToken,
 } from "../utils/jwt.js";
 import {
@@ -49,16 +50,16 @@ const PASSWORD_RESET_EXPIRY = 1 * 60 * 60 * 1000; // 1 hour
  * Never expose password or internal tokens to the client
  *
  * @param user - User object from database
- * @param role - User role from user_role table
  */
-function sanitizeUser(user: User, role: string): UserResponse {
+function sanitizeUser(user: User): UserResponse {
   return {
     id: user.id,
     first_name: user.first_name,
     last_name: user.last_name,
     email: user.email,
     is_email_verified: user.is_email_verified,
-    role: role as UserRole,
+    role: user.role,
+    user_type: user.user_type,
     last_login_at: user.last_login_at,
     created_at: user.created_at,
   };
@@ -74,7 +75,7 @@ function sanitizeUser(user: User, role: string): UserResponse {
 export async function signup(
   data: SignupRequest
 ): Promise<{ user: UserResponse; tokens: AuthTokens }> {
-  const { first_name, last_name, email, password } = data;
+  const { first_name, last_name, email, password, user_type } = data;
 
   // Start a database transaction to ensure atomicity
   const client = await pool.connect();
@@ -93,7 +94,7 @@ export async function signup(
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const verificationToken = generateSecureToken();
+    const verificationCode = generateVerificationCode();
     const verificationExpiry = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY);
 
     const result = await client.query<User>(
@@ -103,9 +104,11 @@ export async function signup(
         email, 
         password, 
         is_email_verified,
+        role,
+        user_type,
         email_verification_token,
         email_verification_expires
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *`,
       [
         first_name,
@@ -113,32 +116,28 @@ export async function signup(
         email,
         passwordHash,
         false,
-        verificationToken,
+        "user",
+        user_type,
+        verificationCode,
         verificationExpiry,
       ]
     );
 
     const user = result.rows[0];
 
-    await client.query(
-      `INSERT INTO user_role (user_id, role, user_type, created_at) 
-       VALUES ($1, $2, NULL, CURRENT_TIMESTAMP)`,
-      [user.id, "user"]
-    );
-
     // Generate auth tokens with the default 'user' role
-    const tokens = generateAuthTokens(user.id, user.email, "user");
+    const tokens = generateAuthTokens(user.id, user.email, user.role);
 
     await client.query("COMMIT");
 
-    sendVerificationEmail(user.email, user.first_name, verificationToken).catch(
+    sendVerificationEmail(user.email, user.first_name, verificationCode).catch(
       (error) => {
         console.error("Failed to send verification email:", error);
       }
     );
 
     return {
-      user: sanitizeUser(user, "user"),
+      user: sanitizeUser(user),
       tokens,
     };
   } catch (error) {
@@ -191,40 +190,31 @@ export async function login(
 
   user.last_login_at = new Date();
 
-  // Get user role from user_role table (default to 'user' if not set)
-  const roleResult = await pool.query(
-    `SELECT role FROM user_role WHERE user_id = $1`,
-    [user.id]
-  );
-
-  const userRole =
-    roleResult.rows.length > 0 ? roleResult.rows[0].role : "user";
-
-  const tokens = generateAuthTokens(user.id, user.email, userRole);
+  const tokens = generateAuthTokens(user.id, user.email, user.role);
 
   return {
-    user: sanitizeUser(user, userRole),
+    user: sanitizeUser(user),
     tokens,
   };
 }
 
 /**
- * Verifies user's email using the verification token
+ * Verifies user's email using the verification code
  *
- * @param token - Email verification token
+ * @param code - 6-digit email verification code
  * @returns Success message
- * @throws Error if token is invalid or expired
+ * @throws Error if code is invalid or expired
  */
-export async function verifyEmail(token: string): Promise<{ message: string }> {
+export async function verifyEmail(code: string): Promise<{ message: string }> {
   const result = await pool.query<User>(
     `SELECT * FROM users 
      WHERE email_verification_token = $1 
      AND email_verification_expires > NOW()`,
-    [token]
+    [code]
   );
 
   if (result.rows.length === 0) {
-    throw new Error("Invalid or expired verification token");
+    throw new Error("Invalid or expired verification code");
   }
 
   const user = result.rows[0];
@@ -268,7 +258,7 @@ export async function resendVerificationEmail(
     throw new Error("Email is already verified");
   }
 
-  const verificationToken = generateSecureToken();
+  const verificationCode = generateVerificationCode();
   const verificationExpiry = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY);
 
   await pool.query(
@@ -277,10 +267,10 @@ export async function resendVerificationEmail(
          email_verification_expires = $2,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = $3`,
-    [verificationToken, verificationExpiry, user.id]
+    [verificationCode, verificationExpiry, user.id]
   );
 
-  await sendVerificationEmail(user.email, user.first_name, verificationToken);
+  await sendVerificationEmail(user.email, user.first_name, verificationCode);
 
   return { message: "Verification email sent" };
 }
@@ -383,7 +373,7 @@ export async function refreshAccessToken(
   const payload = verifyRefreshToken(refreshToken);
 
   const result = await pool.query<User>(
-    "SELECT id, email FROM users WHERE id = $1",
+    "SELECT id, email, role FROM users WHERE id = $1",
     [payload.userId]
   );
 
@@ -393,14 +383,7 @@ export async function refreshAccessToken(
 
   const user = result.rows[0];
 
-  const roleResult = await pool.query(
-    `SELECT role FROM user_role WHERE user_id = $1`,
-    [user.id]
-  );
-  const userRole =
-    roleResult.rows.length > 0 ? roleResult.rows[0].role : "user";
-
-  return generateAuthTokens(user.id, user.email, userRole);
+  return generateAuthTokens(user.id, user.email, user.role);
 }
 
 /**
@@ -413,7 +396,7 @@ export async function refreshAccessToken(
 export async function getUserById(userId: string): Promise<UserResponse> {
   const result = await pool.query<User>(
     `SELECT id, email, first_name, last_name, is_email_verified, 
-            created_at, updated_at, last_login_at 
+            role, user_type, created_at, updated_at, last_login_at 
      FROM users 
      WHERE id = $1`,
     [userId]
@@ -423,19 +406,11 @@ export async function getUserById(userId: string): Promise<UserResponse> {
     throw new Error("User not found");
   }
 
-  // Get user role from user_role table (default to 'user' if not set)
-  const roleResult = await pool.query(
-    `SELECT role FROM user_role WHERE user_id = $1`,
-    [userId]
-  );
-  const userRole =
-    roleResult.rows.length > 0 ? roleResult.rows[0].role : "user";
-
-  return sanitizeUser(result.rows[0], userRole);
+  return sanitizeUser(result.rows[0]);
 }
 
 /**
- * Updates user's role in user_role table (admin operation)
+ * Updates user's role in users table (admin operation)
  *
  * @param userId - User's unique identifier
  * @param role - Role to assign (e.g., 'user', 'admin')
@@ -456,11 +431,8 @@ export async function updateUserRole(
   }
 
   await pool.query(
-    `INSERT INTO user_role (user_id, role, created_at) 
-     VALUES ($1, $2, CURRENT_TIMESTAMP) 
-     ON CONFLICT (user_id) 
-     DO UPDATE SET role = $2`,
-    [userId, role]
+    `UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+    [role, userId]
   );
 
   return { message: "User role updated successfully" };
