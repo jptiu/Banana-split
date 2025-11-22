@@ -132,8 +132,6 @@ export class AuthController {
       });
     } catch (error) {
       const clientIP = getClientIP(c.req.raw.headers);
-
-      // Record failed IP attempt for rate limiting
       const rateLimitResult = recordFailedAttempt(clientIP);
 
       if (error instanceof Error && error.name === "ZodError") {
@@ -149,29 +147,26 @@ export class AuthController {
 
       const errorMessage = getErrorMessage(error);
 
-      // Check if IP is now blocked due to rate limiting
       if (rateLimitResult.isBlocked) {
         return c.json(
           {
             success: false,
-            message: `Too many failed login attempts. Temporarily blocked for ${rateLimitResult.remainingTime} seconds.`,
+            message: `Too many failed login attempts. Please try again in ${rateLimitResult.remainingTime} seconds.`,
           },
           429
         );
       }
 
-      // Check if it's an account lock error (database-tracked)
       if (errorMessage.includes("Account temporarily locked")) {
         return c.json(
           {
             success: false,
             message: errorMessage,
           },
-          423 // 423 Locked status code
+          423
         );
       }
 
-      // Return error with remaining attempts info if available
       return c.json(
         {
           success: false,
