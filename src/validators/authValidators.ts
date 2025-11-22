@@ -23,6 +23,9 @@ export const signupSchema = z.object({
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
       "Password must contain at least one uppercase letter, one lowercase letter, and one number"
     ),
+  user_type: z.enum(["creator", "member"], {
+    message: "User type must be either 'creator' or 'member'",
+  }),
 });
 
 //Login validation schema

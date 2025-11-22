@@ -21,32 +21,24 @@ async function seedUsers() {
     if (existingAdmin.rows.length === 0) {
       const hashedAdminPassword = await bcrypt.hash("admin123", 10);
       const adminResult = await client.query(
-        `INSERT INTO users (first_name, last_name, email, password) 
-         VALUES ($1, $2, $3, $4) 
+        `INSERT INTO users (first_name, last_name, email, password, role, user_type, is_email_verified) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7) 
          RETURNING id`,
-        ["Admin", "User", "admin@example.com", hashedAdminPassword]
+        [
+          "Admin",
+          "User",
+          "admin@example.com",
+          hashedAdminPassword,
+          "admin",
+          null,
+          true,
+        ]
       );
       adminUserId = adminResult.rows[0].id;
       console.log("✓ Created admin user:", adminUserId);
     } else {
       adminUserId = existingAdmin.rows[0].id;
       console.log("✓ Admin user already exists");
-    }
-
-    // Check and insert user_role for admin (user_type is NULL for admin)
-    const existingAdminRole = await client.query(
-      "SELECT id FROM user_role WHERE user_id = $1",
-      [adminUserId]
-    );
-    if (existingAdminRole.rows.length === 0) {
-      await client.query(
-        `INSERT INTO user_role (user_id, role, user_type) 
-         VALUES ($1, $2, $3)`,
-        [adminUserId, "admin", null]
-      );
-      console.log("✓ Created admin role");
-    } else {
-      console.log("✓ Admin role already exists");
     }
 
     await client.query("COMMIT");

@@ -6,6 +6,7 @@
  */
 
 export type UserRole = "user" | "admin";
+export type UserType = "creator" | "member";
 
 export interface User {
   id: string;
@@ -14,6 +15,8 @@ export interface User {
   email: string;
   password: string;
   is_email_verified: boolean;
+  role: UserRole;
+  user_type: UserType | null;
   email_verification_token: string | null;
   email_verification_expires: Date | null;
   password_reset_token: string | null;
@@ -30,6 +33,7 @@ export interface UserResponse {
   email: string;
   is_email_verified: boolean;
   role: UserRole;
+  user_type: UserType | null;
   last_login_at: Date | null;
   created_at: Date;
 }
@@ -57,6 +61,7 @@ export interface SignupRequest {
   last_name: string;
   email: string;
   password: string;
+  user_type: "creator" | "member";
 }
 
 export interface ForgotPasswordRequest {

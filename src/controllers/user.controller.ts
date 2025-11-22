@@ -34,11 +34,13 @@ export class UserController {
     }
   }
 
+  // PATCH /users/:userId/user-type
   static async updateUserType(c: Context) {
     try {
       const userId = c.req.param("userId");
       const { user_type } = await c.req.json();
 
+      // Validate user_type
       if (!user_type || !["creator", "member"].includes(user_type)) {
         return c.json(
           {
@@ -48,6 +50,7 @@ export class UserController {
         );
       }
 
+      // Check if user exists
       const userCheck = await pool.query("SELECT id FROM users WHERE id = $1", [
         userId,
       ]);
@@ -56,23 +59,9 @@ export class UserController {
         return c.json({ error: "User not found" }, 404);
       }
 
-      const roleCheck = await pool.query(
-        "SELECT id FROM user_role WHERE user_id = $1",
-        [userId]
-      );
-
-      if (roleCheck.rows.length === 0) {
-        return c.json(
-          {
-            error:
-              "User role entry not found. User must have a role assigned first.",
-          },
-          404
-        );
-      }
-
+      // Update user_type in users table
       const res = await pool.query(
-        "UPDATE user_role SET user_type = $1 WHERE user_id = $2 RETURNING *",
+        "UPDATE users SET user_type = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, first_name, last_name, email, role, user_type",
         [user_type, userId]
       );
 
