@@ -1,16 +1,3 @@
-/**
- * JWT Utility Module
- *
- * Handles JWT token generation, verification, and refresh token logic.
- *
- * Security considerations:
- * - Uses separate secrets for access and refresh tokens
- * - Short-lived access tokens (15 minutes) minimize exposure window
- * - Longer-lived refresh tokens (7 days) reduce frequent re-authentication
- * - All secrets must be stored in environment variables, never in code
- * - Tokens are signed using HS256 algorithm
- */
-
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import type { JWTPayload, AuthTokens } from "../types/auth.types.js";
@@ -41,12 +28,6 @@ export function validateJWTConfig(): void {
 
 /**
  * Generates an access token for authenticated users
- *
- * Access tokens are short-lived (15 minutes) and contain user identification data.
- * They are used to authenticate API requests.
- *
- * @param payload - User data to encode in the token (userId, email, role)
- * @returns Signed JWT access token
  */
 export function generateAccessToken(payload: JWTPayload): string {
   return jwt.sign(payload, JWT_ACCESS_SECRET, {
@@ -58,12 +39,6 @@ export function generateAccessToken(payload: JWTPayload): string {
 
 /**
  * Generates a refresh token for token renewal
- *
- * Refresh tokens are longer-lived (7 days) and used solely to obtain new access tokens.
- * They should be stored securely on the client (httpOnly cookies preferred).
- *
- * @param payload - User data to encode in the token (userId, email, role)
- * @returns Signed JWT refresh token
  */
 export function generateRefreshToken(payload: JWTPayload): string {
   return jwt.sign(payload, JWT_REFRESH_SECRET, {
@@ -75,11 +50,6 @@ export function generateRefreshToken(payload: JWTPayload): string {
 
 /**
  * Generates both access and refresh tokens for a user
- *
- * @param userId - User's unique identifier
- * @param email - User's email address
- * @param role - User's role (user or admin)
- * @returns Object containing both access and refresh tokens
  */
 export function generateAuthTokens(
   userId: string,
@@ -96,10 +66,6 @@ export function generateAuthTokens(
 
 /**
  * Verifies an access token and extracts the payload
- *
- * @param token - JWT access token to verify
- * @returns Decoded JWT payload if valid
- * @throws Error if token is invalid, expired, or malformed
  */
 export function verifyAccessToken(token: string): JWTPayload {
   try {
@@ -122,10 +88,6 @@ export function verifyAccessToken(token: string): JWTPayload {
 
 /**
  * Verifies a refresh token and extracts the payload
- *
- * @param token - JWT refresh token to verify
- * @returns Decoded JWT payload if valid
- * @throws Error if token is invalid, expired, or malformed
  */
 export function verifyRefreshToken(token: string): JWTPayload {
   try {
@@ -149,9 +111,6 @@ export function verifyRefreshToken(token: string): JWTPayload {
 /**
  * Generates a cryptographically secure random token
  * Used for password reset tokens
- *
- * @param length - Length of the token in bytes (default: 32)
- * @returns Hex string representation of the random token
  */
 export function generateSecureToken(length: number = 32): string {
   return crypto.randomBytes(length).toString("hex");
@@ -160,8 +119,6 @@ export function generateSecureToken(length: number = 32): string {
 /**
  * Generates a 6-digit verification code
  * Used for email verification and password reset
- *
- * @returns 6-digit numeric string
  */
 export function generateVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -170,8 +127,6 @@ export function generateVerificationCode(): string {
 /**
  * Generates a UUID v4
  * Used for request IDs and reset tokens
- *
- * @returns UUID v4 string
  */
 export function generateUUID(): string {
   return crypto.randomUUID();
@@ -179,10 +134,6 @@ export function generateUUID(): string {
 
 /**
  * Extracts Bearer token from Authorization header
- *
- * @param authHeader - Authorization header value
- * @returns Token string without 'Bearer ' prefix
- * @throws Error if header format is invalid
  */
 export function extractBearerToken(authHeader: string | undefined): string {
   if (!authHeader) {

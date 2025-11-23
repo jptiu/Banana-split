@@ -12,8 +12,7 @@ const SMTP_HOST = process.env.SMTP_HOST || "smtp.gmail.com";
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587");
 const SMTP_USER = process.env.SMTP_USER || "";
 const SMTP_PASSWORD = process.env.SMTP_PASSWORD || "";
-const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@banana-split.com";
-const APP_URL = process.env.APP_URL || "http://localhost:5173";
+const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@banana-splits.com";
 
 // Validate email configuration
 if (!SMTP_USER || !SMTP_PASSWORD) {
@@ -40,13 +39,6 @@ const createTransporter = () => {
 
 /**
  * Send Email Verification
- *
- * Sends an email with a 6-digit verification code to confirm user's email address
- * User must enter the code to verify their account before logging in
- *
- * @param email - User's email address
- * @param firstName - User's first name for personalization
- * @param code - 6-digit verification code
  */
 export const sendVerificationEmail = async (
   email: string,
@@ -144,13 +136,6 @@ export const sendVerificationEmail = async (
 
 /**
  * Send Password Reset Email
- *
- * Sends an email with a 6-digit code to reset the user's password
- * Code expires in 10 minutes
- *
- * @param email - User's email address
- * @param firstName - User's first name for personalization
- * @param code - 6-digit verification code
  */
 export const sendPasswordResetEmail = async (
   email: string,
@@ -247,12 +232,6 @@ export const sendPasswordResetEmail = async (
 
 /**
  * Send Password Changed Confirmation Email
- *
- * Sends a confirmation email after successful password change
- * Helps users detect unauthorized password changes
- *
- * @param email - User's email address
- * @param firstName - User's first name for personalization
  */
 export const sendPasswordChangedEmail = async (
   email: string,
@@ -337,9 +316,6 @@ export const sendPasswordChangedEmail = async (
 
 /**
  * Test Email Configuration
- *
- * Sends a test email to verify SMTP configuration
- * Useful for debugging email setup
  */
 export const testEmailConfiguration = async (): Promise<boolean> => {
   try {

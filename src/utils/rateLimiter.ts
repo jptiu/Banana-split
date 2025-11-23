@@ -1,26 +1,3 @@
-/**
- * Rate Limiter Utility
- *
- * Implements in-memory rate limiting to protect against brute-force attacks.
- * Tracks login attempts per hashed IP address and blocks excessive attempts.
- *
- * Security considerations:
- * - Prevents brute-force password attacks by limiting login attempts
- * - IPs are hashed before storage to protect user privacy
- * - Uses sliding window approach to track attempts
- * - Implements exponential backoff after multiple failures
- * - Cleans up old entries to prevent memory leaks and enforce retention limits
- *
- * Privacy considerations:
- * - IP addresses are hashed using HMAC-SHA256 before storage
- * - Original IPs are never stored or logged
- * - Data is automatically purged after 1 hour of inactivity
- *
- * Production considerations:
- * - For production with multiple servers, use Redis for distributed rate limiting
- * - This in-memory implementation works for single-server deployments
- */
-
 import crypto from "crypto";
 import type { RateLimitEntry } from "../types/auth.types.js";
 
@@ -33,16 +10,12 @@ const BLOCK_DURATION = 30 * 60 * 1000; // 30 minutes block after exceeding limit
 const CLEANUP_INTERVAL = 15 * 60 * 1000; // Clean up old entries every 15 minutes
 const DATA_RETENTION_LIMIT = 45 * 60 * 1000; // Keep for 45 minutes (BLOCK_DURATION + buffer)
 
-// Secret key for IP hashing (should be in environment variables in production)
 const IP_HASH_SECRET =
   process.env.IP_HASH_SECRET || "change-me-in-production-use-long-secret";
 
 /**
  * Hashes an IP address using HMAC-SHA256 for privacy protection
  * This ensures original IPs are never stored in memory
- *
- * @param ip - IP address to hash
- * @returns Hashed IP address
  */
 function hashIP(ip: string): string {
   return crypto.createHmac("sha256", IP_HASH_SECRET).update(ip).digest("hex");
@@ -50,7 +23,6 @@ function hashIP(ip: string): string {
 
 /**
  * In-memory storage for rate limiting
- * Key: Hashed IP address (for privacy)
  * Value: Rate limit entry with attempt count and timestamps
  */
 const rateLimitStore = new Map<string, RateLimitEntry>();
@@ -104,9 +76,6 @@ startCleanupTimer();
 
 /**
  * Checks if an identifier (e.g., IP address) is currently rate limited
- *
- * @param ip - IP address to check (will be hashed internally)
- * @returns Object with isBlocked status and remaining time if blocked
  */
 export function checkRateLimit(ip: string): {
   isBlocked: boolean;
@@ -117,7 +86,6 @@ export function checkRateLimit(ip: string): {
   const now = Date.now();
   const entry = rateLimitStore.get(identifier);
 
-  // No entry exists, user is not blocked
   if (!entry) {
     return { isBlocked: false, attemptsRemaining: MAX_ATTEMPTS };
   }
@@ -132,7 +100,6 @@ export function checkRateLimit(ip: string): {
       });
       return { isBlocked: true, remainingTime };
     } else {
-      // Block period expired, remove entry
       rateLimitStore.delete(identifier);
       return { isBlocked: false, attemptsRemaining: MAX_ATTEMPTS };
     }
@@ -140,7 +107,6 @@ export function checkRateLimit(ip: string): {
 
   // Check if rate limit window has expired
   if (now - entry.firstAttempt > RATE_LIMIT_WINDOW) {
-    // Window expired, reset the entry
     rateLimitStore.delete(identifier);
     return { isBlocked: false, attemptsRemaining: MAX_ATTEMPTS };
   }
@@ -152,9 +118,6 @@ export function checkRateLimit(ip: string): {
 
 /**
  * Records a failed login attempt for rate limiting
- *
- * @param ip - IP address (will be hashed internally)
- * @returns Object indicating if the identifier is now blocked
  */
 export function recordFailedAttempt(ip: string): {
   isBlocked: boolean;
@@ -202,8 +165,6 @@ export function recordFailedAttempt(ip: string): {
 
 /**
  * Records a successful login, resetting the rate limit for the identifier
- *
- * @param ip - IP address (will be hashed internally)
  */
 export function recordSuccessfulAttempt(ip: string): void {
   const identifier = hashIP(ip);
@@ -212,9 +173,6 @@ export function recordSuccessfulAttempt(ip: string): void {
 
 /**
  * Manually blocks an identifier (e.g., for suspicious activity)
- *
- * @param ip - IP address to block (will be hashed internally)
- * @param duration - Block duration in milliseconds (default: BLOCK_DURATION)
  */
 export function blockIdentifier(
   ip: string,
@@ -231,8 +189,6 @@ export function blockIdentifier(
 
 /**
  * Removes rate limiting for an identifier (e.g., for administrative override)
- *
- * @param ip - IP address to unblock (will be hashed internally)
  */
 export function unblockIdentifier(ip: string): void {
   const identifier = hashIP(ip);
@@ -243,9 +199,6 @@ export function unblockIdentifier(ip: string): void {
 /**
  * Gets the client IP address from request headers
  * Handles proxies and load balancers
- *
- * @param headers - Request headers object
- * @returns IP address string
  */
 export function getClientIP(
   headers: Headers | Record<string, string | undefined>
@@ -270,7 +223,6 @@ export function getClientIP(
     return realIP;
   }
 
-  // Fallback to a default value
   return "unknown";
 }
 
