@@ -5,7 +5,6 @@ export const shorthands = undefined;
 
 /**
  * @param pgm {import('node-pg-migrate').MigrationBuilder}
- * @param run {() => void | undefined}
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
@@ -21,12 +20,17 @@ export const up = (pgm) => {
     created_at: { type: 'timestamp', default: pgm.func('CURRENT_TIMESTAMP') },
   });
 
+  // Add UNIQUE constraint on owner_id
+  pgm.addConstraint('groups', 'groups_owner_id_unique', {
+    unique: ['owner_id'],
+  });
+
+  // Optional: index owner_id for faster queries
   pgm.createIndex('groups', 'owner_id');
 };
 
 /**
  * @param pgm {import('node-pg-migrate').MigrationBuilder}
- * @param run {() => void | undefined}
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
