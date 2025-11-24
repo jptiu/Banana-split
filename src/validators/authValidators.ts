@@ -67,6 +67,7 @@ export const verifyResetCodeSchema = z.object({
  * Email verification validation schema
  */
 export const verifyEmailSchema = z.object({
+  email: z.string().email({ message: "Invalid email address" }).toLowerCase(),
   token: z.string().min(1, "Token is required"),
 });
 

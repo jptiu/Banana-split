@@ -109,6 +109,22 @@ export function verifyRefreshToken(token: string): JWTPayload {
 }
 
 /**
+ * Extracts refresh token expiration date from a JWT
+ * Used to store expiration in database
+ */
+export function getRefreshTokenExpiration(token: string): Date {
+  try {
+    const decoded = jwt.decode(token) as jwt.JwtPayload;
+    if (!decoded || !decoded.exp) {
+      throw new Error("Invalid token: no expiration found");
+    }
+    return new Date(decoded.exp * 1000);
+  } catch (error) {
+    throw new Error("Failed to extract token expiration");
+  }
+}
+
+/**
  * Generates a cryptographically secure random token
  * Used for password reset tokens
  */

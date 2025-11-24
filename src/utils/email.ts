@@ -127,7 +127,6 @@ export const sendVerificationEmail = async (
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Verification email sent:", info.messageId);
   } catch (error) {
     console.error("❌ Error sending verification email:", error);
     throw new Error("Failed to send verification email");
@@ -223,7 +222,6 @@ export const sendPasswordResetEmail = async (
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Password reset email sent:", info.messageId);
   } catch (error) {
     console.error("❌ Error sending password reset email:", error);
     throw new Error("Failed to send password reset email");
@@ -307,7 +305,6 @@ export const sendPasswordChangedEmail = async (
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Password changed confirmation sent:", info.messageId);
   } catch (error) {
     console.error("❌ Error sending password changed email:", error);
     // Don't throw error for confirmation emails

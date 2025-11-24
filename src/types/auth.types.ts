@@ -29,6 +29,8 @@ export interface User {
   login_locked_until: Date | null;
   last_failed_login_at: Date | null;
   last_login_at: Date | null;
+  refresh_token: string | null;
+  refresh_token_expires: Date | null;
   created_at: Date;
   updated_at: Date;
 }

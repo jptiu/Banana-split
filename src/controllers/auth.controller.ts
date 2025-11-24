@@ -30,6 +30,7 @@ import {
   getClientIP,
 } from "../utils/rateLimiter.js";
 import { getErrorMessage } from "../utils/getErrorMessage.js";
+import { setCookie } from "hono/cookie";
 
 export class AuthController {
   /**
@@ -51,7 +52,6 @@ export class AuthController {
           message: "Account created successfully. Please verify your email.",
           data: {
             user: result.user,
-            tokens: result.tokens,
           },
         },
         201
@@ -122,12 +122,22 @@ export class AuthController {
       // Clear IP rate limiting on successful login
       recordSuccessfulAttempt(clientIP);
 
+      setCookie(c, "refreshToken", result.tokens.refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "Strict",
+        maxAge: 7 * 24 * 60 * 60,
+        path: "/",
+      });
+
       return c.json({
         success: true,
         message: "Login successful",
         data: {
           user: result.user,
-          tokens: result.tokens,
+          tokens: {
+            accessToken: result.tokens.accessToken,
+          },
         },
       });
     } catch (error) {
@@ -180,20 +190,36 @@ export class AuthController {
   /**
    * POST /api/auth/verify-email
    * Verifies user's email using the token sent to their email
+   * Returns auth tokens so user can proceed to dashboard
    *
    * @param c - Hono context
-   * @returns Success message
+   * @returns Success message, user data, and auth tokens
    */
   static async verifyEmail(c: Context) {
     try {
       const body = await c.req.json();
-      const { token } = verifyEmailSchema.parse(body);
+      const { email, token } = verifyEmailSchema.parse(body);
 
-      const result = await AuthService.verifyEmail(token);
+      const result = await AuthService.verifyEmail(email, token);
+
+      // Set refresh token in httpOnly cookie
+      setCookie(c, "refreshToken", result.tokens.refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "Strict",
+        maxAge: 7 * 24 * 60 * 60,
+        path: "/",
+      });
 
       return c.json({
         success: true,
         message: result.message,
+        data: {
+          user: result.user,
+          tokens: {
+            accessToken: result.tokens.accessToken,
+          },
+        },
       });
     } catch (error) {
       if (error instanceof Error && error.name === "ZodError") {
@@ -385,22 +411,63 @@ export class AuthController {
 
   /**
    * POST /api/auth/refresh
-   * Refreshes access token using refresh token
+   * Refreshes access token using refresh token from httpOnly cookie
+   * Returns new tokens and sets new refresh token cookie
    *
    * @param c - Hono context
    * @returns New auth tokens
    */
   static async refreshToken(c: Context) {
     try {
-      const body = await c.req.json();
-      const { refreshToken } = refreshTokenSchema.parse(body);
+      // Try to get refresh token from httpOnly cookie first
+      const cookies = c.req.header("cookie");
+      let refreshToken: string | undefined;
+
+      if (cookies) {
+        const cookieArray = cookies.split(";");
+        const refreshTokenCookie = cookieArray.find((cookie) =>
+          cookie.trim().startsWith("refreshToken=")
+        );
+        if (refreshTokenCookie) {
+          refreshToken = refreshTokenCookie.split("=")[1];
+        }
+      }
+
+      // Fallback to request body if cookie is not present (for backward compatibility)
+      if (!refreshToken) {
+        const body = await c.req.json();
+        const validated = refreshTokenSchema.parse(body);
+        refreshToken = validated.refreshToken;
+      }
+
+      if (!refreshToken) {
+        return c.json(
+          {
+            success: false,
+            message: "Refresh token not provided",
+          },
+          401
+        );
+      }
 
       const tokens = await AuthService.refreshAccessToken(refreshToken);
+
+      setCookie(c, "refreshToken", tokens.refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "Strict",
+        maxAge: 7 * 24 * 60 * 60,
+        path: "/",
+      });
 
       return c.json({
         success: true,
         message: "Token refreshed successfully",
-        data: { tokens },
+        data: {
+          tokens: {
+            accessToken: tokens.accessToken,
+          },
+        },
       });
     } catch (error) {
       if (error instanceof Error && error.name === "ZodError") {
@@ -465,19 +532,37 @@ export class AuthController {
 
   /**
    * POST /api/auth/logout
-   * Logs out the current user
-   *
-   * Note: Since we're using stateless JWT, actual logout is handled client-side
-   * by removing the tokens. This endpoint is here for completeness and could
-   * be used to implement token blacklisting if needed.
-   *
-   * @param c - Hono context
-   * @returns Success message
+   * Logs out the current user by clearing refresh token from database and cookie
    */
   static async logout(c: Context) {
-    return c.json({
-      success: true,
-      message: "Logged out successfully",
-    });
+    try {
+      const userId = c.get("userId");
+
+      if (userId) {
+        // Clear refresh token from database
+        await AuthService.logout(userId);
+      }
+
+      setCookie(c, "refreshToken", "", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "Strict",
+        maxAge: 0,
+        path: "/",
+      });
+
+      return c.json({
+        success: true,
+        message: "Logged out successfully",
+      });
+    } catch (error) {
+      return c.json(
+        {
+          success: false,
+          message: getErrorMessage(error),
+        },
+        500
+      );
+    }
   }
 }

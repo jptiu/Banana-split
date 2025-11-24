@@ -23,6 +23,7 @@ import {
   generateVerificationCode,
   generateUUID,
   verifyRefreshToken,
+  getRefreshTokenExpiration,
 } from "../utils/jwt.js";
 import {
   sendVerificationEmail,
@@ -82,7 +83,7 @@ function sanitizeUser(user: User): UserResponse {
  */
 export async function signup(
   data: SignupRequest
-): Promise<{ user: UserResponse; tokens: AuthTokens }> {
+): Promise<{ user: UserResponse }> {
   const { first_name, last_name, email, password, user_type } = data;
 
   // Start a database transaction to ensure atomicity
@@ -133,9 +134,6 @@ export async function signup(
 
     const user = result.rows[0];
 
-    // Generate auth tokens with the default 'user' role
-    const tokens = generateAuthTokens(user.id, user.email, user.role);
-
     await client.query("COMMIT");
 
     sendVerificationEmail(user.email, user.first_name, verificationCode).catch(
@@ -146,7 +144,6 @@ export async function signup(
 
     return {
       user: sanitizeUser(user),
-      tokens,
     };
   } catch (error) {
     await client.query("ROLLBACK");
@@ -253,20 +250,24 @@ export async function login(
     throw new Error("Please verify your email address before logging in");
   }
 
-  // Successful login - reset failed attempts and update last login
+  // Generate tokens
+  const tokens = generateAuthTokens(user.id, user.email, user.role);
+  const refreshTokenExpiry = getRefreshTokenExpiration(tokens.refreshToken);
+
+  // Successful login - reset failed attempts, update last login, and store refresh token
   await pool.query(
     `UPDATE users 
      SET last_login_at = CURRENT_TIMESTAMP,
          failed_login_attempts = 0,
          login_locked_until = NULL,
-         last_failed_login_at = NULL
+         last_failed_login_at = NULL,
+         refresh_token = $2,
+         refresh_token_expires = $3
      WHERE id = $1`,
-    [user.id]
+    [user.id, tokens.refreshToken, refreshTokenExpiry]
   );
 
   user.last_login_at = new Date();
-
-  const tokens = generateAuthTokens(user.id, user.email, user.role);
 
   return {
     user: sanitizeUser(user),
@@ -276,17 +277,17 @@ export async function login(
 
 /**
  * Verifies user's email using the verification code
- *
- * @param code - 6-digit email verification code
- * @returns Success message
- * @throws Error if code is invalid or expired
  */
-export async function verifyEmail(code: string): Promise<{ message: string }> {
+export async function verifyEmail(
+  email: string,
+  code: string
+): Promise<{ message: string; user: UserResponse; tokens: AuthTokens }> {
   const result = await pool.query<User>(
     `SELECT * FROM users 
-     WHERE email_verification_token = $1 
+     WHERE email = $1
+     AND email_verification_token = $2 
      AND email_verification_expires > NOW()`,
-    [code]
+    [email, code]
   );
 
   if (result.rows.length === 0) {
@@ -295,18 +296,28 @@ export async function verifyEmail(code: string): Promise<{ message: string }> {
 
   const user = result.rows[0];
 
-  // Mark email as verified and clear token
+  // Generate tokens for the user
+  const tokens = generateAuthTokens(user.id, user.email, user.role);
+  const refreshTokenExpiry = getRefreshTokenExpiration(tokens.refreshToken);
+
+  // Mark email as verified, clear token, and store refresh token
   await pool.query(
     `UPDATE users 
      SET is_email_verified = true,
          email_verification_token = NULL,
          email_verification_expires = NULL,
+         refresh_token = $2,
+         refresh_token_expires = $3,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = $1`,
-    [user.id]
+    [user.id, tokens.refreshToken, refreshTokenExpiry]
   );
 
-  return { message: "Email verified successfully" };
+  return {
+    message: "Email verified successfully",
+    user: sanitizeUser(user),
+    tokens,
+  };
 }
 
 /**
@@ -558,6 +569,7 @@ export async function resetPassword(
 
 /**
  * Refreshes access token using a valid refresh token
+ * Validates token against database and rotates refresh token for security
  *
  * @param refreshToken - Valid refresh token
  * @returns New auth tokens
@@ -566,10 +578,14 @@ export async function resetPassword(
 export async function refreshAccessToken(
   refreshToken: string
 ): Promise<AuthTokens> {
+  // Verify the token signature and expiration
   const payload = verifyRefreshToken(refreshToken);
 
+  // Validate token against database
   const result = await pool.query<User>(
-    "SELECT id, email, role FROM users WHERE id = $1",
+    `SELECT id, email, role, refresh_token, refresh_token_expires 
+     FROM users 
+     WHERE id = $1`,
     [payload.userId]
   );
 
@@ -579,7 +595,36 @@ export async function refreshAccessToken(
 
   const user = result.rows[0];
 
-  return generateAuthTokens(user.id, user.email, user.role);
+  // Validate that the token matches what's stored in the database
+  if (user.refresh_token !== refreshToken) {
+    throw new Error("Invalid refresh token");
+  }
+
+  // Check if the stored token has expired
+  if (
+    !user.refresh_token_expires ||
+    new Date(user.refresh_token_expires) < new Date()
+  ) {
+    throw new Error("Refresh token has expired");
+  }
+
+  // Generate new tokens (token rotation)
+  const newTokens = generateAuthTokens(user.id, user.email, user.role);
+  const newRefreshTokenExpiry = getRefreshTokenExpiration(
+    newTokens.refreshToken
+  );
+
+  // Update the refresh token in the database
+  await pool.query(
+    `UPDATE users 
+     SET refresh_token = $1,
+         refresh_token_expires = $2,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $3`,
+    [newTokens.refreshToken, newRefreshTokenExpiry, user.id]
+  );
+
+  return newTokens;
 }
 
 /**
@@ -632,4 +677,20 @@ export async function updateUserRole(
   );
 
   return { message: "User role updated successfully" };
+}
+
+/**
+ * Logs out a user by clearing their refresh token from the database
+ */
+export async function logout(userId: string): Promise<{ message: string }> {
+  await pool.query(
+    `UPDATE users 
+     SET refresh_token = NULL,
+         refresh_token_expires = NULL,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1`,
+    [userId]
+  );
+
+  return { message: "Logged out successfully" };
 }
