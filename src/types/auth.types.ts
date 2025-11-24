@@ -21,7 +21,16 @@ export interface User {
   email_verification_expires: Date | null;
   password_reset_token: string | null;
   password_reset_expires: Date | null;
+  password_reset_code: string | null;
+  password_reset_request_id: string | null;
+  password_reset_attempts: number | null;
+  password_reset_locked_until: Date | null;
+  failed_login_attempts: number | null;
+  login_locked_until: Date | null;
+  last_failed_login_at: Date | null;
   last_login_at: Date | null;
+  refresh_token: string | null;
+  refresh_token_expires: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -41,6 +50,7 @@ export interface UserResponse {
 export interface JWTPayload {
   userId: string;
   email: string;
+  name: string;
   role: UserRole;
   iat?: number;
   exp?: number;
@@ -68,8 +78,23 @@ export interface ForgotPasswordRequest {
   email: string;
 }
 
+export interface ForgotPasswordResponse {
+  message: string;
+  requestId: string;
+}
+
+export interface VerifyResetCodeRequest {
+  requestId: string;
+  code: string;
+}
+
+export interface VerifyResetCodeResponse {
+  message: string;
+  resetToken: string;
+}
+
 export interface ResetPasswordRequest {
-  token: string;
+  resetToken: string;
   newPassword: string;
 }
 

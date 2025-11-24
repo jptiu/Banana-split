@@ -20,12 +20,6 @@ import type { UserRole } from "../types/auth.types.js";
 /**
  * Authentication middleware
  * Verifies JWT token and attaches user info to context
- *
- * Usage:
- * app.get('/protected', authenticate, (c) => { ... })
- *
- * @param c - Hono context
- * @param next - Next middleware function
  */
 export async function authenticate(c: Context, next: Next) {
   try {
@@ -37,6 +31,7 @@ export async function authenticate(c: Context, next: Next) {
     const payload = verifyAccessToken(token);
 
     // Attach user info to context for use in route handlers
+    c.set("userName", payload.name);
     c.set("userId", payload.userId);
     c.set("userEmail", payload.email);
     c.set("userRole", payload.role);
@@ -84,6 +79,7 @@ export async function optionalAuthenticate(c: Context, next: Next) {
     const payload = verifyAccessToken(token);
 
     // Attach user info to context
+    c.set("userName", payload.name);
     c.set("userId", payload.userId);
     c.set("userEmail", payload.email);
     c.set("userRole", payload.role);

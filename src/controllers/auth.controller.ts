@@ -20,6 +20,7 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   verifyEmailSchema,
+  verifyResetCodeSchema,
   refreshTokenSchema,
 } from "../validators/authValidators.js";
 import {
@@ -29,6 +30,7 @@ import {
   getClientIP,
 } from "../utils/rateLimiter.js";
 import { getErrorMessage } from "../utils/getErrorMessage.js";
+import { setCookie } from "hono/cookie";
 
 export class AuthController {
   /**
@@ -50,13 +52,11 @@ export class AuthController {
           message: "Account created successfully. Please verify your email.",
           data: {
             user: result.user,
-            tokens: result.tokens,
           },
         },
         201
       );
     } catch (error) {
-
       if (error instanceof Error && error.name === "ZodError") {
         return c.json(
           {
@@ -94,7 +94,7 @@ export class AuthController {
   /**
    * POST /api/auth/login
    * Authenticates a user with email and password
-   * Implements rate limiting to prevent brute-force attacks
+   * Implements both IP-based rate limiting and database-tracked account locking
    *
    * @param c - Hono context
    * @returns User object and auth tokens
@@ -119,20 +119,29 @@ export class AuthController {
 
       const result = await AuthService.login(validatedData);
 
+      // Clear IP rate limiting on successful login
       recordSuccessfulAttempt(clientIP);
+
+      setCookie(c, "refreshToken", result.tokens.refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "Strict",
+        maxAge: 7 * 24 * 60 * 60,
+        path: "/",
+      });
 
       return c.json({
         success: true,
         message: "Login successful",
         data: {
           user: result.user,
-          tokens: result.tokens,
+          tokens: {
+            accessToken: result.tokens.accessToken,
+          },
         },
       });
     } catch (error) {
-
       const clientIP = getClientIP(c.req.raw.headers);
-
       const rateLimitResult = recordFailedAttempt(clientIP);
 
       if (error instanceof Error && error.name === "ZodError") {
@@ -152,9 +161,19 @@ export class AuthController {
         return c.json(
           {
             success: false,
-            message: `Too many failed login attempts. Account temporarily locked for ${rateLimitResult.remainingTime} seconds.`,
+            message: `Too many failed login attempts. Please try again in ${rateLimitResult.remainingTime} seconds.`,
           },
           429
+        );
+      }
+
+      if (errorMessage.includes("Account temporarily locked")) {
+        return c.json(
+          {
+            success: false,
+            message: errorMessage,
+          },
+          423
         );
       }
 
@@ -162,7 +181,6 @@ export class AuthController {
         {
           success: false,
           message: errorMessage,
-          attemptsRemaining: rateLimitResult.attemptsRemaining,
         },
         401
       );
@@ -172,23 +190,38 @@ export class AuthController {
   /**
    * POST /api/auth/verify-email
    * Verifies user's email using the token sent to their email
+   * Returns auth tokens so user can proceed to dashboard
    *
    * @param c - Hono context
-   * @returns Success message
+   * @returns Success message, user data, and auth tokens
    */
   static async verifyEmail(c: Context) {
     try {
       const body = await c.req.json();
-      const { token } = verifyEmailSchema.parse(body);
+      const { email, token } = verifyEmailSchema.parse(body);
 
-      const result = await AuthService.verifyEmail(token);
+      const result = await AuthService.verifyEmail(email, token);
+
+      // Set refresh token in httpOnly cookie
+      setCookie(c, "refreshToken", result.tokens.refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "Strict",
+        maxAge: 7 * 24 * 60 * 60,
+        path: "/",
+      });
 
       return c.json({
         success: true,
         message: result.message,
+        data: {
+          user: result.user,
+          tokens: {
+            accessToken: result.tokens.accessToken,
+          },
+        },
       });
     } catch (error) {
-
       if (error instanceof Error && error.name === "ZodError") {
         return c.json(
           {
@@ -255,7 +288,7 @@ export class AuthController {
    * Initiates password reset process
    *
    * @param c - Hono context
-   * @returns Success message (always returns success to prevent user enumeration)
+   * @returns Success message and requestId
    */
   static async forgotPassword(c: Context) {
     try {
@@ -267,6 +300,9 @@ export class AuthController {
       return c.json({
         success: true,
         message: result.message,
+        data: {
+          requestId: result.requestId,
+        },
       });
     } catch (error) {
       if (error instanceof Error && error.name === "ZodError") {
@@ -282,9 +318,54 @@ export class AuthController {
 
       return c.json({
         success: true,
-        message:
-          "If an account exists with this email, a password reset link will be sent",
+        message: "Verification code sent.",
+        data: {
+          requestId: "00000000-0000-0000-0000-000000000000",
+        },
       });
+    }
+  }
+
+  /**
+   * POST /api/auth/verify-reset-code
+   * Verifies the 6-digit reset code and generates reset token
+   *
+   * @param c - Hono context
+   * @returns Success message and resetToken
+   */
+  static async verifyResetCode(c: Context) {
+    try {
+      const body = await c.req.json();
+      const { requestId, code } = verifyResetCodeSchema.parse(body);
+
+      const result = await AuthService.verifyResetCode(requestId, code);
+
+      return c.json({
+        success: true,
+        message: result.message,
+        data: {
+          resetToken: result.resetToken,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "ZodError") {
+        return c.json(
+          {
+            success: false,
+            message: "Validation error",
+            errors: error,
+          },
+          400
+        );
+      }
+
+      return c.json(
+        {
+          success: false,
+          message: getErrorMessage(error),
+        },
+        400
+      );
     }
   }
 
@@ -298,16 +379,15 @@ export class AuthController {
   static async resetPassword(c: Context) {
     try {
       const body = await c.req.json();
-      const { token, newPassword } = resetPasswordSchema.parse(body);
+      const { resetToken, newPassword } = resetPasswordSchema.parse(body);
 
-      const result = await AuthService.resetPassword(token, newPassword);
+      const result = await AuthService.resetPassword(resetToken, newPassword);
 
       return c.json({
         success: true,
         message: result.message,
       });
     } catch (error) {
-
       if (error instanceof Error && error.name === "ZodError") {
         return c.json(
           {
@@ -331,25 +411,65 @@ export class AuthController {
 
   /**
    * POST /api/auth/refresh
-   * Refreshes access token using refresh token
+   * Refreshes access token using refresh token from httpOnly cookie
+   * Returns new tokens and sets new refresh token cookie
    *
    * @param c - Hono context
    * @returns New auth tokens
    */
   static async refreshToken(c: Context) {
     try {
-      const body = await c.req.json();
-      const { refreshToken } = refreshTokenSchema.parse(body);
+      // Try to get refresh token from httpOnly cookie first
+      const cookies = c.req.header("cookie");
+      let refreshToken: string | undefined;
+
+      if (cookies) {
+        const cookieArray = cookies.split(";");
+        const refreshTokenCookie = cookieArray.find((cookie) =>
+          cookie.trim().startsWith("refreshToken=")
+        );
+        if (refreshTokenCookie) {
+          refreshToken = refreshTokenCookie.split("=")[1];
+        }
+      }
+
+      // Fallback to request body if cookie is not present (for backward compatibility)
+      if (!refreshToken) {
+        const body = await c.req.json();
+        const validated = refreshTokenSchema.parse(body);
+        refreshToken = validated.refreshToken;
+      }
+
+      if (!refreshToken) {
+        return c.json(
+          {
+            success: false,
+            message: "Refresh token not provided",
+          },
+          401
+        );
+      }
 
       const tokens = await AuthService.refreshAccessToken(refreshToken);
+
+      setCookie(c, "refreshToken", tokens.refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "Strict",
+        maxAge: 7 * 24 * 60 * 60,
+        path: "/",
+      });
 
       return c.json({
         success: true,
         message: "Token refreshed successfully",
-        data: { tokens },
+        data: {
+          tokens: {
+            accessToken: tokens.accessToken,
+          },
+        },
       });
     } catch (error) {
-
       if (error instanceof Error && error.name === "ZodError") {
         return c.json(
           {
@@ -412,19 +532,37 @@ export class AuthController {
 
   /**
    * POST /api/auth/logout
-   * Logs out the current user
-   *
-   * Note: Since we're using stateless JWT, actual logout is handled client-side
-   * by removing the tokens. This endpoint is here for completeness and could
-   * be used to implement token blacklisting if needed.
-   *
-   * @param c - Hono context
-   * @returns Success message
+   * Logs out the current user by clearing refresh token from database and cookie
    */
   static async logout(c: Context) {
-    return c.json({
-      success: true,
-      message: "Logged out successfully",
-    });
+    try {
+      const userId = c.get("userId");
+
+      if (userId) {
+        // Clear refresh token from database
+        await AuthService.logout(userId);
+      }
+
+      setCookie(c, "refreshToken", "", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "Strict",
+        maxAge: 0,
+        path: "/",
+      });
+
+      return c.json({
+        success: true,
+        message: "Logged out successfully",
+      });
+    } catch (error) {
+      return c.json(
+        {
+          success: false,
+          message: getErrorMessage(error),
+        },
+        500
+      );
+    }
   }
 }
