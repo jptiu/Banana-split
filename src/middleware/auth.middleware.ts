@@ -30,8 +30,8 @@ export async function authenticate(c: Context, next: Next) {
     // Verify token and extract payload
     const payload = verifyAccessToken(token);
 
-    console.log("✅ PAYLOAD: ", payload);
     // Attach user info to context for use in route handlers
+    c.set("userName", payload.name);
     c.set("userId", payload.userId);
     c.set("userEmail", payload.email);
     c.set("userRole", payload.role);
@@ -79,6 +79,7 @@ export async function optionalAuthenticate(c: Context, next: Next) {
     const payload = verifyAccessToken(token);
 
     // Attach user info to context
+    c.set("userName", payload.name);
     c.set("userId", payload.userId);
     c.set("userEmail", payload.email);
     c.set("userRole", payload.role);

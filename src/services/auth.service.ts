@@ -251,7 +251,8 @@ export async function login(
   }
 
   // Generate tokens
-  const tokens = generateAuthTokens(user.id, user.email, user.role);
+  const name = `${user.first_name} ${user.last_name}`;
+  const tokens = generateAuthTokens(user.id, user.email, name, user.role);
   const refreshTokenExpiry = getRefreshTokenExpiration(tokens.refreshToken);
 
   // Successful login - reset failed attempts, update last login, and store refresh token
@@ -297,7 +298,8 @@ export async function verifyEmail(
   const user = result.rows[0];
 
   // Generate tokens for the user
-  const tokens = generateAuthTokens(user.id, user.email, user.role);
+  const name = `${user.first_name} ${user.last_name}`;
+  const tokens = generateAuthTokens(user.id, user.email, name, user.role);
   const refreshTokenExpiry = getRefreshTokenExpiration(tokens.refreshToken);
 
   // Mark email as verified, clear token, and store refresh token
@@ -583,7 +585,7 @@ export async function refreshAccessToken(
 
   // Validate token against database
   const result = await pool.query<User>(
-    `SELECT id, email, role, refresh_token, refresh_token_expires 
+    `SELECT id, email, first_name, last_name, role, refresh_token, refresh_token_expires 
      FROM users 
      WHERE id = $1`,
     [payload.userId]
@@ -609,7 +611,8 @@ export async function refreshAccessToken(
   }
 
   // Generate new tokens (token rotation)
-  const newTokens = generateAuthTokens(user.id, user.email, user.role);
+  const name = `${user.first_name} ${user.last_name}`;
+  const newTokens = generateAuthTokens(user.id, user.email, name, user.role);
   const newRefreshTokenExpiry = getRefreshTokenExpiration(
     newTokens.refreshToken
   );

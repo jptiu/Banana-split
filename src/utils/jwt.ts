@@ -54,9 +54,10 @@ export function generateRefreshToken(payload: JWTPayload): string {
 export function generateAuthTokens(
   userId: string,
   email: string,
+  name: string,
   role: "user" | "admin"
 ): AuthTokens {
-  const payload: JWTPayload = { userId, email, role };
+  const payload: JWTPayload = { userId, email, name, role };
 
   return {
     accessToken: generateAccessToken(payload),

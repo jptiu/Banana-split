@@ -50,6 +50,7 @@ export interface UserResponse {
 export interface JWTPayload {
   userId: string;
   email: string;
+  name: string;
   role: UserRole;
   iat?: number;
   exp?: number;
