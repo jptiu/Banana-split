@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import { UserController } from '../controllers/user.controller.js'
-import { authenticate, requireAdmin } from '../middleware/auth.middleware.js'
+import { authenticate, requireRole } from '../middleware/auth.middleware.js'
 
 const app = new Hono()
 
-app.get('/', authenticate, requireAdmin, UserController.getUsers)
-app.post('/', authenticate, requireAdmin, UserController.createUser)
+app.get('/', authenticate, requireRole('admin'), UserController.getUsers)
+app.post('/', authenticate, requireRole('admin'), UserController.createUser)
 
 export default app

@@ -1,14 +1,20 @@
 import { Hono } from 'hono'
 import { PlaidController } from '../controllers/plaid.controller.js'
+import { authenticate, requireRole } from '../middleware/auth.middleware.js'
 
 const app = new Hono()
 
-app.get('/link-token', PlaidController.generateLinkToken)
-app.post('/exchange', PlaidController.exchangePublicToken)
+//for backend testing purposes only
 app.get('/sandbox/public-token', PlaidController.createSandboxPublicToken)
-app.post('/accounts', PlaidController.getAccounts)
-app.post('/balances', PlaidController.getBalances)
-app.post('/transactions', PlaidController.getTransactions)
-app.post('/item', PlaidController.getItem)
+app.post('/sandbox/fire-webhook', PlaidController.fireSandboxWebhook)
+
+app.get('/link-token', authenticate, requireRole('creator'), PlaidController.generateLinkToken)
+app.post('/exchange', authenticate, requireRole('creator'), PlaidController.exchangePublicToken)
+app.post('/accounts', authenticate, requireRole('creator'), PlaidController.getAccounts)
+app.post('/balances', authenticate, requireRole('creator'), PlaidController.getBalances)
+app.post('/transactions', authenticate, requireRole('creator'), PlaidController.getTransactions)
+app.post('/item', authenticate, requireRole('creator'), PlaidController.getItem)
+
+app.post('/webhook', PlaidController.handleWebhook)
 
 export default app

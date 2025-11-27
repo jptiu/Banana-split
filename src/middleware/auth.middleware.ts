@@ -83,6 +83,7 @@ export async function optionalAuthenticate(c: Context, next: Next) {
     c.set("userId", payload.userId);
     c.set("userEmail", payload.email);
     c.set("userRole", payload.role);
+    c.set("isAdmin", payload.is_admin);
     c.set("isAuthenticated", true);
 
     await next();
@@ -110,17 +111,7 @@ export function requireRole(allowedRoles: UserRole | UserRole[]) {
   return async (c: Context, next: Next) => {
     try {
       // Get user role from context (set by authenticate middleware)
-      const userRole = c.get("userRole") as UserRole | undefined;
-
-      if (!userRole) {
-        return c.json(
-          {
-            success: false,
-            message: "Authentication required",
-          },
-          401
-        );
-      }
+      const userRole = c.get("userRole") as UserRole;
 
       // Check if user's role is in allowed roles
       if (!roles.includes(userRole)) {
@@ -144,43 +135,6 @@ export function requireRole(allowedRoles: UserRole | UserRole[]) {
       );
     }
   };
-}
-
-/**
- * Admin-only middleware
- * Shorthand for requiring admin role
- * Must be used after authenticate middleware
- *
- * Usage:
- * app.get('/admin-dashboard', authenticate, requireAdmin, (c) => { ... })
- *
- * @param c - Hono context
- * @param next - Next middleware function
- */
-export async function requireAdmin(c: Context, next: Next) {
-  const userRole = c.get("userRole") as UserRole | undefined;
-
-  if (!userRole) {
-    return c.json(
-      {
-        success: false,
-        message: "Authentication required",
-      },
-      401
-    );
-  }
-
-  if (userRole !== "admin") {
-    return c.json(
-      {
-        success: false,
-        message: "Admin access required",
-      },
-      403
-    );
-  }
-
-  await next();
 }
 
 /**
@@ -252,7 +206,7 @@ export function requireSelfOrAdmin(paramName: string = "id") {
   return async (c: Context, next: Next) => {
     try {
       const userId = c.get("userId");
-      const userRole = c.get("userRole") as UserRole;
+      const admin = c.get("isAdmin");
       const targetUserId = c.req.param(paramName);
 
       if (!userId) {
@@ -266,7 +220,7 @@ export function requireSelfOrAdmin(paramName: string = "id") {
       }
 
       // Allow if user is admin or accessing their own resource
-      if (userRole === "admin" || userId === targetUserId) {
+      if (admin || userId === targetUserId) {
         await next();
         return;
       }

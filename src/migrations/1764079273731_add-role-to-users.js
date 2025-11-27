@@ -9,15 +9,13 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
-  pgm.addColumn('users', {
-    group_id: {
-      type: 'uuid',
-      references: 'groups(id)',
-      onDelete: 'SET NULL'
-    }
-  });
-
-  pgm.createIndex('users', 'group_id');
+    pgm.addColumn('users', {
+        role: {
+            type: 'text',
+            notNull: true,
+            default: 'member', // default role
+        },
+    });
 };
 
 /**
@@ -26,5 +24,5 @@ export const up = (pgm) => {
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
-  pgm.dropColumn('users', 'group_id');
+      pgm.dropColumn('users', 'role');
 };

@@ -68,7 +68,7 @@ function sanitizeUser(user: User): UserResponse {
     email: user.email,
     is_email_verified: user.is_email_verified,
     role: user.role,
-    user_type: user.user_type,
+    is_admin: user.is_admin,
     last_login_at: user.last_login_at,
     created_at: user.created_at,
   };
@@ -84,7 +84,7 @@ function sanitizeUser(user: User): UserResponse {
 export async function signup(
   data: SignupRequest
 ): Promise<{ user: UserResponse }> {
-  const { first_name, last_name, email, password, user_type } = data;
+  const { first_name, last_name, email, password, role } = data;
 
   // Start a database transaction to ensure atomicity
   const client = await pool.connect();
@@ -114,10 +114,9 @@ export async function signup(
         password, 
         is_email_verified,
         role,
-        user_type,
         email_verification_token,
         email_verification_expires
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *`,
       [
         first_name,
@@ -125,8 +124,7 @@ export async function signup(
         email,
         passwordHash,
         false,
-        "user",
-        user_type,
+        role,
         verificationCode,
         verificationExpiry,
       ]
@@ -187,8 +185,7 @@ export async function login(
       (new Date(user.login_locked_until).getTime() - Date.now()) / 1000 / 60
     );
     throw new Error(
-      `Account temporarily locked due to multiple failed login attempts. Please try again in ${remainingTime} minute${
-        remainingTime !== 1 ? "s" : ""
+      `Account temporarily locked due to multiple failed login attempts. Please try again in ${remainingTime} minute${remainingTime !== 1 ? "s" : ""
       }.`
     );
   }
@@ -240,8 +237,7 @@ export async function login(
 
     const remainingAttempts = MAX_LOGIN_ATTEMPTS - failedAttempts;
     throw new Error(
-      `Invalid email or password. ${remainingAttempts} attempt${
-        remainingAttempts !== 1 ? "s" : ""
+      `Invalid email or password. ${remainingAttempts} attempt${remainingAttempts !== 1 ? "s" : ""
       } remaining.`
     );
   }
@@ -252,7 +248,7 @@ export async function login(
 
   // Generate tokens
   const name = `${user.first_name} ${user.last_name}`;
-  const tokens = generateAuthTokens(user.id, user.email, name, user.role);
+  const tokens = generateAuthTokens(user.id, user.email, name, user.role, user.is_admin);
   const refreshTokenExpiry = getRefreshTokenExpiration(tokens.refreshToken);
 
   // Successful login - reset failed attempts, update last login, and store refresh token
@@ -299,7 +295,7 @@ export async function verifyEmail(
 
   // Generate tokens for the user
   const name = `${user.first_name} ${user.last_name}`;
-  const tokens = generateAuthTokens(user.id, user.email, name, user.role);
+  const tokens = generateAuthTokens(user.id, user.email, name, user.role, user.is_admin);
   const refreshTokenExpiry = getRefreshTokenExpiration(tokens.refreshToken);
 
   // Mark email as verified, clear token, and store refresh token
@@ -446,8 +442,8 @@ export async function verifyResetCode(
   ) {
     const remainingTime = Math.ceil(
       (new Date(user.password_reset_locked_until).getTime() - Date.now()) /
-        1000 /
-        60
+      1000 /
+      60
     );
     throw new Error(
       `Too many failed attempts. Please try again in ${remainingTime} minutes.`
@@ -496,8 +492,7 @@ export async function verifyResetCode(
 
     const remainingAttempts = PASSWORD_RESET_MAX_ATTEMPTS - attempts;
     throw new Error(
-      `Invalid verification code. ${remainingAttempts} attempt${
-        remainingAttempts !== 1 ? "s" : ""
+      `Invalid verification code. ${remainingAttempts} attempt${remainingAttempts !== 1 ? "s" : ""
       } remaining.`
     );
   }
@@ -612,7 +607,7 @@ export async function refreshAccessToken(
 
   // Generate new tokens (token rotation)
   const name = `${user.first_name} ${user.last_name}`;
-  const newTokens = generateAuthTokens(user.id, user.email, name, user.role);
+  const newTokens = generateAuthTokens(user.id, user.email, name, user.role, user.is_admin);
   const newRefreshTokenExpiry = getRefreshTokenExpiration(
     newTokens.refreshToken
   );
@@ -640,7 +635,7 @@ export async function refreshAccessToken(
 export async function getUserById(userId: string): Promise<UserResponse> {
   const result = await pool.query<User>(
     `SELECT id, email, first_name, last_name, is_email_verified, 
-            role, user_type, created_at, updated_at, last_login_at 
+     role, is_admin, created_at, updated_at, last_login_at 
      FROM users 
      WHERE id = $1`,
     [userId]
