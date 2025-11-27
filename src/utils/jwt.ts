@@ -55,9 +55,10 @@ export function generateAuthTokens(
   userId: string,
   email: string,
   name: string,
-  role: "user" | "admin"
+  role: "admin" | "creator" | "member",
+  is_admin: boolean
 ): AuthTokens {
-  const payload: JWTPayload = { userId, email, name, role };
+  const payload: JWTPayload = { userId, email, name, role, is_admin };
 
   return {
     accessToken: generateAccessToken(payload),

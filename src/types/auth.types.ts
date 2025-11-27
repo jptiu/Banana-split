@@ -5,8 +5,7 @@
  * Ensures type safety across the authentication flow.
  */
 
-export type UserRole = "user" | "admin";
-export type UserType = "creator" | "member";
+export type UserRole = "admin" | "creator" | "member";
 
 export interface User {
   id: string;
@@ -16,7 +15,7 @@ export interface User {
   password: string;
   is_email_verified: boolean;
   role: UserRole;
-  user_type: UserType | null;
+  is_admin: boolean
   email_verification_token: string | null;
   email_verification_expires: Date | null;
   password_reset_token: string | null;
@@ -42,7 +41,7 @@ export interface UserResponse {
   email: string;
   is_email_verified: boolean;
   role: UserRole;
-  user_type: UserType | null;
+  is_admin: boolean
   last_login_at: Date | null;
   created_at: Date;
 }
@@ -52,6 +51,7 @@ export interface JWTPayload {
   email: string;
   name: string;
   role: UserRole;
+  is_admin: boolean
   iat?: number;
   exp?: number;
 }
@@ -71,7 +71,7 @@ export interface SignupRequest {
   last_name: string;
   email: string;
   password: string;
-  user_type: "creator" | "member";
+  role: "creator" | "member";
 }
 
 export interface ForgotPasswordRequest {
