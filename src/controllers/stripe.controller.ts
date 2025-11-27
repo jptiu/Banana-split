@@ -54,8 +54,8 @@ export class StripeController {
       const accountId = await StripeService.getStripeAccountIdForUser(userId)
       if (!accountId) return c.json({ error: 'Stripe account not found' }, 404)
 
-      const refreshUrl = `${process.env.FRONTEND_URL}/stripe/refresh`
-      const returnUrl = `${process.env.FRONTEND_URL}/stripe/return`
+      const refreshUrl = `${process.env.APP_URL}/stripe/refresh`
+      const returnUrl = `${process.env.APP_URL}/stripe/return`
 
       const link = await StripeService.createAccountLink(accountId, refreshUrl, returnUrl)
 

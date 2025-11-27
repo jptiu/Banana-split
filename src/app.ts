@@ -7,15 +7,15 @@ dotenv.config()
 
 const app = new Hono()
 
-if (!process.env.FRONTEND_URL) {
-  throw new Error("FRONTEND_URL must be set in environment variables")
+if (!process.env.APP_URL) {
+  throw new Error("APP_URL must be set in environment variables")
 }
 
 // ✅ Apply CORS BEFORE any routes
 app.use(
     '/*',
     cors({
-        origin: process.env.FRONTEND_URL,
+        origin: process.env.APP_URL,
         allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         allowHeaders: ['Content-Type', 'Authorization'],
     })
