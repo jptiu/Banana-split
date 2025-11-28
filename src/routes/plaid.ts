@@ -10,7 +10,7 @@ app.post('/sandbox/fire-webhook', PlaidController.fireSandboxWebhook)
 
 app.get('/link-token', authenticate, requireRole('creator'), PlaidController.generateLinkToken)
 app.post('/exchange', authenticate, requireRole('creator'), PlaidController.exchangePublicToken)
-app.post('/accounts', authenticate, requireRole('creator'), PlaidController.getAccounts)
+app.get('/accounts', authenticate, requireRole('creator'), PlaidController.getAccounts)
 app.post('/balances', authenticate, requireRole('creator'), PlaidController.getBalances)
 app.post('/transactions', authenticate, requireRole('creator'), PlaidController.getTransactions)
 app.post('/item', authenticate, requireRole('creator'), PlaidController.getItem)

@@ -9,34 +9,40 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
+    // Ensure UUID generation function is available
+    pgm.createExtension('uuid-ossp', { ifNotExists: true });
+
     pgm.createTable('revenue_shares', {
-        id: {
-            type: 'uuid',
-            primaryKey: true,
-            default: pgm.func('gen_random_uuid()'),
-        },
-        user_id: {
+        id: { type: 'uuid', primaryKey: true, notNull: true, default: pgm.func('uuid_generate_v4()') },
+
+        recipients_id: {
             type: 'uuid',
             notNull: true,
-            references: '"users"',
+            references: '"recipients"(id)',
             onDelete: 'cascade',
         },
+
         percentage: {
-            type: 'numeric',
+            type: 'int',
             notNull: true,
         },
+
         active: {
             type: 'boolean',
             notNull: true,
             default: true,
         },
+
         created_at: {
             type: 'timestamp',
-            default: pgm.func('now()'),
+            notNull: true,
+            default: pgm.func('NOW()'),
         },
     });
 
-    pgm.createIndex('revenue_shares', 'user_id');
+    // Indexes
+    pgm.createIndex('revenue_shares', 'recipients_id');
+    pgm.createIndex('revenue_shares', 'active');
 };
 
 /**
@@ -45,5 +51,7 @@ export const up = (pgm) => {
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
+    pgm.dropIndex('revenue_shares', 'recipients_id');
+    pgm.dropIndex('revenue_shares', 'active');
     pgm.dropTable('revenue_shares');
 };

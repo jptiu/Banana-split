@@ -12,32 +12,50 @@ export const up = (pgm) => {
     // Ensure UUID generation function is available
     pgm.createExtension('uuid-ossp', { ifNotExists: true });
 
-    pgm.createTable('stripe_accounts', {
+    pgm.createTable('institutions', {
         id: { type: 'uuid', primaryKey: true, notNull: true, default: pgm.func('uuid_generate_v4()') },
-        user_id: {
+
+        bank_account_id: {
             type: 'uuid',
             notNull: true,
-            references: '"users"',
+            references: '"bank_accounts"(id)',
             onDelete: 'cascade',
         },
-        stripe_account_id: {
+
+        institution_id: {
             type: 'text',
             notNull: true,
-            unique: true,
         },
-        onboarded: {
-            type: 'boolean',
+
+        name: {
+            type: 'text',
             notNull: true,
-            default: false,
         },
+
+        item_id: {
+            type: 'text',
+            notNull: true,
+        },
+
         created_at: {
             type: 'timestamp',
-            default: pgm.func('now()'),
+            notNull: true,
+            default: pgm.func('NOW()'),
         },
     });
 
-    pgm.createIndex('stripe_accounts', 'user_id');
-    pgm.createIndex('stripe_accounts', 'stripe_account_id');
+    // UNIQUE: one institution per bank account
+    pgm.addConstraint(
+        'institutions',
+        'institutions_bank_account_unique',
+        {
+            unique: ['bank_account_id'],
+        }
+    );
+
+    // Indexes for faster lookup
+    pgm.createIndex('institutions', 'institution_id');
+    pgm.createIndex('institutions', 'item_id');
 };
 
 /**
@@ -46,5 +64,8 @@ export const up = (pgm) => {
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
-    pgm.dropTable('stripe_accounts');
+    pgm.dropIndex('institutions', 'institution_id');
+    pgm.dropIndex('institutions', 'item_id');
+    pgm.dropConstraint('institutions', 'institution_bank_account_unique');
+    pgm.dropTable('institutions');
 };

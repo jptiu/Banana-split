@@ -4,12 +4,15 @@ import { PlaidService } from '../services/plaid.service.js'
 import { StripeService } from '../services/stripe.service.js'
 import { getErrorMessage } from '../utils/getErrorMessage.js'
 import { pool } from '../config/db.js'
+import type { Institution } from '../types/plaid.types.js'
 
 export class PlaidController {
   // Generate Link Token
   static async generateLinkToken(c: Context) {
     try {
       const userId = c.get('userId')
+      if (!userId) return c.json({ error: 'Unauthorized' }, 401)
+
       const data = await PlaidService.generatePlaidLinkToken(userId)
       return c.json(data)
     } catch (err: unknown) {
@@ -61,18 +64,76 @@ export class PlaidController {
   // Get Accounts
   static async getAccounts(c: Context) {
     try {
-      const { access_token } = await c.req.json()
-      if (!access_token) {
-        return c.json({ error: 'access_token is required' }, 400)
+      const userId = c.get('userId');
+      if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+
+      // 1️⃣ Get the user's Plaid account
+      const res = await pool.query(
+        'SELECT id, access_token FROM plaid_accounts WHERE user_id = $1',
+        [userId]
+      );
+
+      if (res.rowCount === 0) {
+        return c.json({ error: 'No Plaid account found for this user' }, 404);
       }
 
-      const data = await PlaidService.getPlaidAccounts(access_token)
-      return c.json(data)
+      const { id: plaidAccountId, access_token } = res.rows[0];
+
+      const instRes = (await pool.query<Institution>(
+        'SELECT * FROM institutions WHERE plaid_account_id = $1',
+        [plaidAccountId]
+      )) as { rowCount: number; rows: Institution[] };
+
+      let institution;
+
+      if (instRes.rowCount > 0) {
+        // Institution already stored
+        institution = instRes.rows[0];
+
+        // Get all bank accounts for this institution
+        const accountsRes = await pool.query(
+          'SELECT * FROM bank_accounts WHERE ins_id = $1',
+          [institution.id]
+        );
+
+        return c.json({
+          data: {
+            institution,
+            bank_accounts: accountsRes.rows,
+          },
+        });
+      }
+
+      const data = await PlaidService.getPlaidAccounts(access_token);
+      const accounts = data.accounts || [];
+      if (accounts.length === 0) return c.json({ bank_accounts: [] });
+
+      const item = data.item;
+
+      institution = await PlaidService.storeInstitution({
+        plaid_account_id: plaidAccountId,
+        institution_id: item.institution_id as string,
+        name: item.institution_name as string,
+        item_id: item.item_id as string,
+      });
+
+      const bankAccounts = await PlaidService.storeBankAccounts(
+        accounts,
+        institution.id
+      );
+      // 6️⃣ Return newly stored institution with bank accounts
+      return c.json({
+        data: {
+          institution,
+          bank_accounts: bankAccounts,
+        },
+      });
     } catch (err: unknown) {
-      console.error('Error getting accounts:', err)
-      return c.json({ error: getErrorMessage(err) }, 500)
+      console.error('Error getting accounts:', err);
+      return c.json({ error: getErrorMessage(err) }, 500);
     }
   }
+
 
   // Get Balances
   static async getBalances(c: Context) {

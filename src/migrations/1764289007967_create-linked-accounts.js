@@ -12,32 +12,17 @@ export const up = (pgm) => {
     // Ensure UUID generation function is available
     pgm.createExtension('uuid-ossp', { ifNotExists: true });
 
-    pgm.createTable('stripe_accounts', {
+    pgm.createTable('linked_accounts', {
         id: { type: 'uuid', primaryKey: true, notNull: true, default: pgm.func('uuid_generate_v4()') },
-        user_id: {
-            type: 'uuid',
-            notNull: true,
-            references: '"users"',
-            onDelete: 'cascade',
-        },
-        stripe_account_id: {
-            type: 'text',
-            notNull: true,
-            unique: true,
-        },
-        onboarded: {
-            type: 'boolean',
-            notNull: true,
-            default: false,
-        },
-        created_at: {
-            type: 'timestamp',
-            default: pgm.func('now()'),
-        },
+        user_id: { type: 'uuid', notNull: true, references: '"users"(id)', onDelete: 'cascade' },
+        bank_account_id: { type: 'uuid', notNull: true, references: '"bank_accounts"(id)', onDelete: 'cascade' },
+        platform_id: { type: 'uuid', notNull: false, references: '"platforms"(id)', onDelete: 'set null' },
+        created_at: { type: 'timestamp', notNull: true, default: pgm.func('NOW()') },
     });
 
-    pgm.createIndex('stripe_accounts', 'user_id');
-    pgm.createIndex('stripe_accounts', 'stripe_account_id');
+    pgm.createIndex('linked_accounts', 'user_id');
+    pgm.createIndex('linked_accounts', 'bank_account_id');
+    pgm.createIndex('linked_accounts', 'platform_id');
 };
 
 /**
@@ -46,5 +31,5 @@ export const up = (pgm) => {
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
-    pgm.dropTable('stripe_accounts');
+    pgm.dropTable('linked_accounts');
 };

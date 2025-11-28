@@ -1,5 +1,4 @@
 import { pool } from "../config/db.js";
-import { v4 as uuidv4 } from "uuid";
 
 export async function seed() {
   try {
@@ -29,11 +28,11 @@ export async function seed() {
     for (const p of platforms) {
       await pool.query(
         `
-        INSERT INTO platforms (id, name, description)
-        VALUES ($1, $2, $3)
+        INSERT INTO platforms (name, description)
+        VALUES ($1, $2)
         ON CONFLICT (name) DO NOTHING
         `,
-        [uuidv4(), p.name, p.description]
+        [p.name, p.description]
       );
 
       console.log(`✅ Platform seeded: ${p.name}`);
