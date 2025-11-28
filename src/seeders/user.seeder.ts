@@ -11,6 +11,7 @@ export async function seed() {
         email: 'admin@example.com',
         password: 'admin123',
         role: 'admin',
+        position: 'Administrator',
       },
       {
         first_name: 'Creator',
@@ -18,6 +19,7 @@ export async function seed() {
         email: 'creator@example.com',
         password: 'creator123',
         role: 'creator',
+        position: 'Content Creator',
       },
       {
         first_name: 'Member',
@@ -25,6 +27,7 @@ export async function seed() {
         email: 'member@example.com',
         password: 'member123',
         role: 'member',
+        position: 'Editor',
       },
     ]
 
@@ -33,14 +36,15 @@ export async function seed() {
 
       await pool.query(
         `
-        INSERT INTO users (id, first_name, last_name, email, password, is_email_verified, role)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO users (id, first_name, last_name, email, password, is_email_verified, role, position)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (email) DO UPDATE 
         SET 
           first_name = EXCLUDED.first_name,
           last_name = EXCLUDED.last_name,
           password = EXCLUDED.password,
-          role = EXCLUDED.role
+          role = EXCLUDED.role,
+          position = EXCLUDED.position
         `,
         [
           uuidv4(),
@@ -50,6 +54,7 @@ export async function seed() {
           passwordHash,
           true,
           u.role,
+          u.position,
         ]
       )
 

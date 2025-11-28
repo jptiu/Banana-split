@@ -9,16 +9,19 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
-    pgm.createExtension('uuid-ossp', { ifNotExists: true });
-
     pgm.createTable('plaid_accounts', {
-        id: { type: 'uuid', primaryKey: true, default: pgm.func('uuid_generate_v4()') },
+        id: { type: 'uuid', primaryKey: true, notNull: true, default: pgm.func('gen_random_uuid()') },
         user_id: { type: 'uuid', notNull: true, references: 'users(id)', onDelete: 'cascade' },
         access_token: { type: 'text', notNull: true },
         item_id: { type: 'text', notNull: true },
         created_at: { type: 'timestamp', notNull: true, default: pgm.func('current_timestamp') },
         last_processed_date: { type: 'date', notNull: false, default: null }
     })
+
+    // Add indexes
+    pgm.createIndex('plaid_accounts', 'user_id');
+    pgm.createIndex('plaid_accounts', 'item_id');
+    pgm.createIndex('plaid_accounts', 'access_token');
 };
 
 /**
