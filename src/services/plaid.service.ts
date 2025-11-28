@@ -7,6 +7,7 @@ import {
 } from 'plaid'
 
 import type { SandboxTransactionsCreateRequest } from 'plaid'
+import type { BankAccount, BankAccountInput, Institution } from '../types/plaid.types.js'
 export class PlaidService {
     // Generate a Link Token for a user
     static async generatePlaidLinkToken(userId: string) {
@@ -132,5 +133,64 @@ export class PlaidService {
             console.error('Error firing Plaid sandbox webhook:', err)
             throw err
         }
+    }
+
+    static async storeInstitution(inst: {
+        plaid_account_id: string
+        institution_id: string
+        name: string
+        item_id: string
+    }): Promise<Institution> {
+        const res = await pool.query<Institution>(
+            `
+      INSERT INTO institutions (plaid_account_id, institution_id, name, item_id, created_at)
+      VALUES ($1, $2, $3, $4, NOW())
+      ON CONFLICT (plaid_account_id) DO UPDATE
+        SET name = EXCLUDED.name,
+            institution_id = EXCLUDED.institution_id,
+            item_id = EXCLUDED.item_id
+      RETURNING *
+      `,
+            [inst.plaid_account_id, inst.institution_id, inst.name, inst.item_id]
+        )
+
+        return res.rows[0]
+    }
+
+    static async storeBankAccounts(
+        accounts: BankAccountInput[],
+        insId: string
+    ): Promise<BankAccount[]> {
+        const storedAccounts: BankAccount[] = [];
+
+        for (const acct of accounts) {
+            const { rows } = await pool.query<BankAccount>(
+                `
+      INSERT INTO bank_accounts
+        (ins_id, account_id, name, mask, official_name, subtype, type, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      ON CONFLICT (account_id) DO UPDATE
+        SET name = EXCLUDED.name,
+            mask = EXCLUDED.mask,
+            official_name = EXCLUDED.official_name,
+            subtype = EXCLUDED.subtype,
+            type = EXCLUDED.type
+      RETURNING *
+      `,
+                [
+                    insId,
+                    acct.account_id,
+                    acct.name,
+                    acct.mask,
+                    acct.official_name,
+                    acct.subtype,
+                    acct.type,
+                ]
+            );
+
+            storedAccounts.push(rows[0]);
+        }
+
+        return storedAccounts;
     }
 }

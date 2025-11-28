@@ -1,6 +1,5 @@
 import { pool } from '../config/db.js'
 import bcrypt from 'bcrypt'
-import { v4 as uuidv4 } from 'uuid'
 
 export async function seed() {
   try {
@@ -36,8 +35,8 @@ export async function seed() {
 
       await pool.query(
         `
-        INSERT INTO users (id, first_name, last_name, email, password, is_email_verified, role, position)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO users (first_name, last_name, email, password, is_email_verified, role, position)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (email) DO UPDATE 
         SET 
           first_name = EXCLUDED.first_name,
@@ -47,7 +46,6 @@ export async function seed() {
           position = EXCLUDED.position
         `,
         [
-          uuidv4(),
           u.first_name,
           u.last_name,
           u.email,

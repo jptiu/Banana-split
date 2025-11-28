@@ -9,8 +9,11 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
+    // Ensure UUID generation function is available
+    pgm.createExtension('uuid-ossp', { ifNotExists: true });
+
     pgm.createTable('recipients', {
-        id: { type: 'uuid', primaryKey: true, notNull: true, default: pgm.func('gen_random_uuid()') },
+        id: { type: 'uuid', primaryKey: true, notNull: true, default: pgm.func('uuid_generate_v4()') },
         split_id: { type: 'uuid', notNull: true, references: '"splits"(id)', onDelete: 'cascade' },
         user_id: { type: 'uuid', notNull: true, references: '"users"(id)', onDelete: 'cascade' },
         created_at: { type: 'timestamp', notNull: true, default: pgm.func('NOW()') },

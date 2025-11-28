@@ -12,7 +12,7 @@ export const up = (pgm) => {
     pgm.createTable('bank_accounts', {
         id: { type: 'uuid', primaryKey: true, notNull: true, default: pgm.func('gen_random_uuid()') },
         plaid_account_id: { type: 'uuid', notNull: false },
-        account_id: { type: 'text', notNull: true },
+        account_id: { type: 'text', notNull: true, unique: true },
         name: { type: 'text', notNull: false },
         mask: { type: 'text', notNull: false },
         official_name: { type: 'text', notNull: false },

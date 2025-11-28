@@ -9,12 +9,11 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
+    // Ensure UUID generation function is available
+    pgm.createExtension('uuid-ossp', { ifNotExists: true });
+
     pgm.createTable('stripe_accounts', {
-        id: {
-            type: 'uuid',
-            primaryKey: true,
-            default: pgm.func('gen_random_uuid()'),
-        },
+        id: { type: 'uuid', primaryKey: true, notNull: true, default: pgm.func('uuid_generate_v4()') },
         user_id: {
             type: 'uuid',
             notNull: true,
